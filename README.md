@@ -14,13 +14,14 @@ or use the Python CLI below.
 - Historical single-symbol replay with estimated charges, slippage, adverse stop gaps, conservative ambiguous-bar handling and doubled-cost stress.
 - Point-in-time fundamental screening with source/publication dates and rejection of missing, stale or future information.
 - A local virtual-INR journal with cash, position and planned-risk limits; daily entry/open-position caps; loss-streak/drawdown stops; pause; stale-quote and duplicate-event rejection.
+- A deterministic paper session engine with a risk gate, automatic stop/target/square-off exits, stale-feed halt, reconciliation and restart recovery. See [engine reference](skills/day-trader-india/references/engine.md).
 - Fourteen portable skills, optional native Claude/Codex specialist profiles, synthetic examples and offline regression tests.
 
 The supplied opening-range rule is a test harness, not a proven trading strategy. A passing test verifies software behaviour, not investment performance.
 
 ## What is not running
 
-There is no continuous runner, live quote stream, automatic paper stop/target execution, live broker order path, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
+There is no continuous wall-clock runner, live quote stream, live broker order path, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
 
 The broker adapters are implemented but require an authorised account session, appropriate data entitlement and a verified symbol/instrument mapping. No account is connected by cloning this repository. Authenticated broker access has not been integration-tested in this project.
 
@@ -84,6 +85,19 @@ Use command help for entries, full-position exits and pausing:
 python3 scripts/paper_book.py --book data/demo.sqlite buy --help
 python3 scripts/paper_book.py --book data/demo.sqlite sell --help
 python3 scripts/paper_book.py --book data/demo.sqlite pause --help
+```
+
+### Replay a session through the engine
+
+The engine applies stops, targets and the session square-off itself, through the same journal.
+
+```bash
+python3 scripts/engine.py replay \
+  --bars skills/day-trader-india/assets/synthetic-bars.csv \
+  --sessions skills/day-trader-india/assets/synthetic-sessions.json \
+  --symbol NSE:DEMO --date 2026-10-19 --book data/engine-demo.sqlite \
+  --cash 100000 --risk 250 --daily-loss 750 --position-cap 15000 \
+  --target-r 2 --fee-bps 5 --fee-flat 10 --slippage-bps 5
 ```
 
 ### Download broker history

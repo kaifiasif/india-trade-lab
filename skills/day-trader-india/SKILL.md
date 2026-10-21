@@ -167,6 +167,14 @@ separate, clearly linked version-3 practice period. `init --replay` creates a
 separate `replay_demo` book for historical/
 synthetic examples. Never merge its performance with `paper_manual` results.
 
+## Run the session engine
+
+`scripts/engine.py` drives the same journal from a deterministic, clock-driven
+loop: risk gate, automatic stop/target/square-off exits, stale-feed halt,
+reconciliation and restart recovery. It is paper-only. Its `replay` command
+runs one historical session into a new `replay_demo` book. Read
+[engine.md](references/engine.md) for parts, exit rules and what is not built.
+
 ## Optional additions and boundaries
 
 Read [resources.md](references/resources.md) for official learning/data resources
