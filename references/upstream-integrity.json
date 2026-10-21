@@ -1,0 +1,41 @@
+{
+  "repository": "https://github.com/Jakeschincariol/day-trader-skill",
+  "commit": "3d0f4ef6986f4984b7c6bd46f7ff4f87744c3abd",
+  "verification_date": "2026-10-21",
+  "upstream_offline_tests_passed": 315,
+  "installed_upstream_python_sha256": {
+    "trader-alerts": {
+      "alerts.py": "2db22d8e9b27ff1776600dd53664e21b55fc8787ed1abdd9e6f1e79bcc80c74f"
+    },
+    "trader-analyst": {
+      "facts.py": "6cd7e24588e7389268cd6af6315768bd9c292032773fe1a7364e07696d7ac6b9"
+    },
+    "trader-broker": {
+      "ticket.py": "9500300b3ceba93c1423c0e022654bc6283cbed9084c81b324778f062a5f6559"
+    },
+    "trader-budget": {
+      "size.py": "2dcb2ef604a92fb022ca210eb67a9b28ef82fefe5f7a2382ce2592461a6d3cba"
+    },
+    "trader-entry": {
+      "entry.py": "11518ca87e329520741044329e37066207d8a096d37809cd29ebed9f6d2776ec"
+    },
+    "trader-exit": {
+      "exit.py": "8183a2cc5c71cecef33d7ae6a401416a5d042aeb7d130a1f8d5e8a51642447fc"
+    },
+    "trader-news": {
+      "news.py": "bf9e12a9c5962de3f661bf334e76f4df417a39879ff067426b338b7a063c71f3"
+    },
+    "trader-pelosi": {
+      "ptr.py": "b325c8b56a9580f8ce6a447b5b5d3d9c34508bbed3d67d50d3f71603807e9fcc"
+    },
+    "trader-risk": {
+      "check.py": "6faf9372c20d30b33dbc6175d0d81935f8dc88bc8e94aacd2ed0ae6919aafa18"
+    },
+    "trader-scanner": {
+      "scan.py": "2cc0d99a4f21d2b8a28b6917d527ca17e3a71dea0951365d5f82c6b5afcac913"
+    },
+    "trader-timemachine": {
+      "timemachine.py": "5e73d566c78e5e42142371319491eef6257b6fc31fab5a87aa62506d03e9b5a1"
+    }
+  }
+}

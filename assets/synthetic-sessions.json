@@ -1,0 +1,12 @@
+{
+  "timezone": "Asia/Kolkata",
+  "source": "SYNTHETIC_TEST_ONLY",
+  "sessions": {
+    "2026-10-19": {
+      "open": "09:15",
+      "close": "15:30",
+      "entry_cutoff": "14:30",
+      "flat_by": "15:15"
+    }
+  }
+}

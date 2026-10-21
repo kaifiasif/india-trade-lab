@@ -1,0 +1,12 @@
+[
+  {
+    "metric": "revenue_growth_yoy",
+    "op": ">=",
+    "value": 0
+  },
+  {
+    "metric": "debt_to_equity",
+    "op": "<=",
+    "value": 1
+  }
+]

@@ -1,0 +1,14 @@
+interface:
+  display_name: India Market Trader — Paper First
+  short_description: Indian stock research, replay and virtual trading
+  default_prompt: Use $day-trader-india to research Indian cash equities and evaluate
+    a paper trade with realistic costs and strict risk limits.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
