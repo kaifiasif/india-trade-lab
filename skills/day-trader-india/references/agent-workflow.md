@@ -1,5 +1,7 @@
 # Indian specialist workflow
 
+Contents: [Roles](#roles-and-ownership), [Delegation](#delegate-by-dependency), [Handoffs](#exchange-structured-handoffs), [Recording boundary](#keep-recording-separate).
+
 ## Roles and ownership
 
 Use `day-trader-india` as the coordinator and runtime. Delegate bounded research

@@ -1,5 +1,7 @@
 # Guardrails for manual Indian paper practice
 
+Contents: [Enforced checks](#what-the-software-checks), [Practice ceilings](#forward-practice-ceilings), [Evidence](#supply-dated-pre-trade-evidence), [Halt and recovery](#halt-migration-and-recovery), [Instructions and credentials](#instructions-credentials-and-reports).
+
 Use `scripts/paper_book.py` for a local virtual-INR journal. It has no real-order
 route. A recorded fill is an assumption supplied by a person, and a stop does
 not execute automatically. These controls limit accepted journal entries; they
