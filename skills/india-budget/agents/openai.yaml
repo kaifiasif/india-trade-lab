@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Virtual Position Budget"
+  short_description: "Size whole-share virtual positions with costs"
+  default_prompt: "Use $india-budget to size this virtual INR trade in whole shares including costs and cash reserves."

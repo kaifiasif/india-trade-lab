@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "symbol": "NSE:REPLACE_WITH_VERIFIED_SYMBOL",
+  "quote_source": "REPLACE_WITH_AUTHORIZED_QUOTE_SOURCE",
+  "quote_as_of": "REPLACE_WITH_ORIGINAL_TIMEZONE_AWARE_QUOTE_TIMESTAMP",
+  "checked_at": "REPLACE_WITH_CURRENT_TIMEZONE_AWARE_REVIEW_TIMESTAMP",
+  "checks": {
+    "cash_equity": false,
+    "instrument_verified": false,
+    "surveillance_clear": false,
+    "price_band_ok": false,
+    "no_material_event": false,
+    "liquidity_ok": false,
+    "sector_exposure_ok": false,
+    "data_authorized": false,
+    "strategy_rule_met": false,
+    "stop_target_reviewed": false
+  },
+  "evidence_sources": {
+    "cash_equity": "REPLACE_WITH_DATED_CASH_SEGMENT_EVIDENCE",
+    "instrument_verified": "REPLACE_WITH_DATED_INSTRUMENT_MASTER_REFERENCE",
+    "surveillance_clear": "REPLACE_WITH_DATED_SURVEILLANCE_REVIEW",
+    "price_band_ok": "REPLACE_WITH_DATED_PRICE_BAND_EVIDENCE",
+    "no_material_event": "REPLACE_WITH_DATED_EVENT_AND_ANNOUNCEMENT_REVIEW",
+    "liquidity_ok": "REPLACE_WITH_DATED_VOLUME_DEPTH_AND_PARTICIPATION_REVIEW",
+    "sector_exposure_ok": "REPLACE_WITH_CURRENT_PORTFOLIO_AND_SECTOR_REVIEW",
+    "data_authorized": "REPLACE_WITH_AUTHORIZED_DATA_ENTITLEMENT_REFERENCE_NO_SECRETS",
+    "strategy_rule_met": "REPLACE_WITH_STRATEGY_VERSION_AND_COMPLETED_BAR_EVIDENCE",
+    "stop_target_reviewed": "REPLACE_WITH_DATED_STOP_TARGET_COST_AND_TIME_EXIT_REVIEW"
+  },
+  "session": {
+    "date": "REPLACE_WITH_YYYY-MM-DD",
+    "source": "REPLACE_WITH_DATE_SPECIFIC_OFFICIAL_EXCHANGE_SESSION_REFERENCE",
+    "open": "REPLACE_WITH_HH:MM",
+    "entry_cutoff": "REPLACE_WITH_HH:MM",
+    "close": "REPLACE_WITH_HH:MM"
+  },
+  "bid_inr": "REPLACE_WITH_CURRENT_POSITIVE_BID",
+  "ask_inr": "REPLACE_WITH_CURRENT_POSITIVE_ASK"
+}

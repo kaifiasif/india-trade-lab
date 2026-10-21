@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Data Steward"
+  short_description: "Verify Indian cash-equity data and provenance"
+  default_prompt: "Use $india-data to verify my Indian cash-equity research inputs and return a sourced handoff."

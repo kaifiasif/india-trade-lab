@@ -15,3 +15,11 @@ logs/
 config.local.*
 credentials*.json
 .DS_Store
+dist/
+.ruff_cache/
+.coverage
+htmlcov/
+.claude/skills/
+.agents/skills/
+.cursor/skills/
+.github/skills/

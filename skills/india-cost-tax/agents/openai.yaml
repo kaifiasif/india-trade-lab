@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Costs and Tax Evidence"
+  short_description: "Review dated Indian charges and tax assumptions"
+  default_prompt: "Use $india-cost-tax to verify dated Indian cost and tax assumptions for my paper research."

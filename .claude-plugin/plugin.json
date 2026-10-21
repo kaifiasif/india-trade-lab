@@ -1,0 +1,26 @@
+{
+  "name": "india-trade-lab",
+  "version": "0.2.0",
+  "description": "Indian cash-equity research and paper trading: coordinator, twelve specialists and developer standards. No live orders.",
+  "author": {
+    "name": "Kaifi Asif"
+  },
+  "homepage": "https://github.com/kaifiasif/india-trade-lab",
+  "repository": "https://github.com/kaifiasif/india-trade-lab",
+  "license": "MIT",
+  "skills": "./skills/",
+  "agents": [
+    "./agent_profiles/claude/india-data.md",
+    "./agent_profiles/claude/india-news.md",
+    "./agent_profiles/claude/india-analyst.md",
+    "./agent_profiles/claude/india-screener.md",
+    "./agent_profiles/claude/india-disclosures.md",
+    "./agent_profiles/claude/india-budget.md",
+    "./agent_profiles/claude/india-risk.md",
+    "./agent_profiles/claude/india-paper-broker.md",
+    "./agent_profiles/claude/india-alerts.md",
+    "./agent_profiles/claude/india-cost-tax.md",
+    "./agent_profiles/claude/india-rebalance.md",
+    "./agent_profiles/claude/india-reviewer.md"
+  ]
+}

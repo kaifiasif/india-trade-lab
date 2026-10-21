@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Portfolio Rebalance Research"
+  short_description: "Review portfolio drift, reserves and trade costs"
+  default_prompt: "Use $india-rebalance to review my Indian holdings and compare cost-aware rebalance scenarios."

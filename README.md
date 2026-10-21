@@ -1,8 +1,11 @@
 # India Trade Lab
 
-Indian cash-equity research and paper-trading tools, with an AI skill for guiding the workflow. Built for NSE/BSE, INR and Asia/Kolkata.
+Indian cash-equity research and paper-trading tools, with a coordinator and twelve specialist AI roles. Built for NSE/BSE, INR and Asia/Kolkata.
 
 **Paper first. No live order execution. No promise of loss-free trading.**
+
+Start with [skill installation](docs/installation.md) for Claude, Codex and other agents,
+or use the Python CLI below.
 
 ## What works
 
@@ -11,7 +14,7 @@ Indian cash-equity research and paper-trading tools, with an AI skill for guidin
 - Historical single-symbol replay with estimated charges, slippage, adverse stop gaps, conservative ambiguous-bar handling and doubled-cost stress.
 - Point-in-time fundamental screening with source/publication dates and rejection of missing, stale or future information.
 - A local virtual-INR journal with cash, position and planned-risk limits; daily entry/open-position caps; loss-streak/drawdown stops; pause; stale-quote and duplicate-event rejection.
-- Synthetic examples and 23 offline checks.
+- Fourteen portable skills, optional native Claude/Codex specialist profiles, synthetic examples and offline regression tests.
 
 The supplied opening-range rule is a test harness, not a proven trading strategy. A passing test verifies software behaviour, not investment performance.
 
@@ -32,7 +35,10 @@ The broker adapters are implemented but require an authorised account session, a
 ```bash
 git clone https://github.com/kaifiasif/india-trade-lab.git
 cd india-trade-lab
-python3 -B -m unittest discover -s scripts -p 'test_*.py' -v
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+python scripts/check.py
 ```
 
 ### Run the made-up example
@@ -41,13 +47,13 @@ The bundled `NSE:DEMO` data is **synthetic**. It is not observed market history 
 
 ```bash
 python3 scripts/india_research.py scan-orb \
-  --bars assets/synthetic-bars.csv \
-  --sessions assets/synthetic-sessions.json \
+  --bars skills/day-trader-india/assets/synthetic-bars.csv \
+  --sessions skills/day-trader-india/assets/synthetic-sessions.json \
   --as-of 2026-10-19T09:35:00+05:30
 
 python3 scripts/india_research.py replay-orb \
-  --bars assets/synthetic-bars.csv \
-  --sessions assets/synthetic-sessions.json \
+  --bars skills/day-trader-india/assets/synthetic-bars.csv \
+  --sessions skills/day-trader-india/assets/synthetic-sessions.json \
   --symbol NSE:DEMO --as-of 2026-10-19T15:30:00+05:30 \
   --cash 100000 --risk 250 --daily-loss 750 --position-cap 15000 \
   --target-r 2 --fee-bps 5 --fee-flat 10 --slippage-bps 5 \
@@ -82,7 +88,7 @@ python3 scripts/paper_book.py --book data/demo.sqlite pause --help
 
 ### Download broker history
 
-Read [data and tool interfaces](references/data-and-tools.md) first. The adapter issues GET requests only and does not place orders.
+Read [data and tool interfaces](skills/day-trader-india/references/data-and-tools.md) first. The adapter issues GET requests only and does not place orders.
 
 ```bash
 # Set KITE_API_KEY and KITE_ACCESS_TOKEN privately outside chat and Git.
@@ -95,15 +101,85 @@ python3 scripts/broker_data.py --provider kite \
 
 For Upstox use `UPSTOX_ACCESS_TOKEN`, `--provider upstox`, and a verified cash-equity instrument key. Quote keys containing a pipe in your shell, for example `'NSE_EQ|VERIFIED_ISIN'`. These are placeholders, not working credentials or identifiers. Existing output files are not overwritten.
 
-## Use the AI skill
+## Install the skills
 
-The root [SKILL.md](SKILL.md) supplies the workflow. Load it in a skill-capable assistant, or install this repository into that client's supported skill directory under the name `day-trader-india`.
+The installable skills are now in [`skills/`](skills/), not the repository root.
+Each folder includes its own instructions and resources.
 
-Example request:
+| Skill | Use it for |
+| --- | --- |
+| [day-trader-india](skills/day-trader-india/SKILL.md) | Indian market research, historical evaluation and manual paper trading |
+| [india-trade-dev](skills/india-trade-dev/SKILL.md) | Code reviews, tests, portable packaging and clear technical documentation |
 
-> Use $day-trader-india to walk me through Indian stock paper trading with ₹1,00,000 virtual capital. Keep all execution virtual and show costs, missing evidence and risk limits.
+From this checkout, choose your client:
 
-A skill file provides instructions; it does not start a background service. Client installation and tool-execution support vary.
+```bash
+python3 scripts/install_skills.py --platform claude --scope user --with-agents
+python3 scripts/install_skills.py --platform codex --scope user --with-agents
+```
+
+These are alternatives; run the one for your client, or both if you use both.
+The default installs all fourteen skills. `--with-agents` also installs twelve native specialist profiles for that client. Existing files are never replaced.
+Use `/day-trader-india` in Claude Code or `$day-trader-india` in Codex.
+
+For **Claude web / Desktop**, run `python3 scripts/package_skills.py` and upload
+the core ZIP and any role ZIPs you need from `dist/` in **Customize > Skills**. Full instructions for Claude,
+Codex, Cursor, Copilot and other hosts are in [installation](docs/installation.md).
+A skill does not start a background service or connect your broker.
+
+## Specialist agents and guardrails
+
+The pack includes data, news, earnings analysis, screening, disclosures, budget,
+risk, paper-broker, alerts, costs/tax, rebalancing and independent reviewer roles.
+See the [role map and handoff contract](skills/day-trader-india/references/agent-workflow.md).
+Native Claude/Codex profiles are in [agent_profiles/](agent_profiles/). They
+return research findings; the coordinator runs tools. On other hosts, invoke
+role skills or follow their procedures sequentially and label that limitation.
+
+Use this request after installation:
+
+> Use day-trader-india to coordinate the Indian research agents. Review the data,
+> news, setup, budget and risks, then have the independent reviewer challenge the
+> proposal. Return DATA BLOCK for missing evidence. Keep everything virtual.
+
+The offline workflow CLI prints dependency plans and validates handoff packets:
+
+```bash
+python3 skills/day-trader-india/scripts/agent_workflow.py plan \
+  --workflow intraday --symbol NSE:DEMO \
+  --as-of 2026-10-19T10:00:00+05:30 --run-id synthetic-demo
+```
+
+This plans delegation; it does not launch models or start a service. The
+coordinator uses the host's subagent feature. Any veto, missing report or
+changed proposal blocks review completion. A completed review never authorizes
+an order or replaces the journal's gates.
+
+Forward manual entries now require a **version-3 journal** and sourced
+`--evidence` JSON. Added controls include fixed practice ceilings, supplied
+session/quote/spread checks, a loss cooldown, entry halt and state checksums.
+Existing accounting, duplicate, loss-streak and drawdown controls remain.
+Read [guardrails and limitations](skills/day-trader-india/references/guardrails.md)
+for the exact enforced/manual boundary and migration from older books. No
+collection of guardrails guarantees loss-free trading or truthful input data.
+
+## Code and writing standards
+
+The runtime implementation lives in `skills/day-trader-india/scripts/`. The
+original `scripts/broker_data.py`, `scripts/india_research.py` and
+`scripts/paper_book.py` remain compatible CLI entry points. Offline regression
+tests live in `tests/`; install/package/validation tools live in `scripts/`.
+References and synthetic assets moved inside the trading skill so copied
+installations work without this checkout.
+
+[AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md) give coding assistants the repo
+rules. [CONTRIBUTING.md](CONTRIBUTING.md) documents the development workflow and
+[engineering standards](skills/india-trade-dev/references/engineering.md) define
+code and writing expectations. `python scripts/check.py` runs Ruff lint,
+format checks, skill metadata and local-link validation, generated-agent drift checks, and offline tests.
+GitHub Actions uses the same command on Python 3.10 and 3.12 and uploads skill
+ZIPs as a workflow artifact. Public function annotations support readability;
+full static type checking is not enforced yet.
 
 ## Automation roadmap
 
@@ -119,11 +195,11 @@ GitHub stores and versions the code. Continuous intraday monitoring requires a r
 
 ## References
 
-- [Risk process and limitations](references/risk-process.md)
-- [Data and CLI schemas](references/data-and-tools.md)
-- [Broker connections and sandbox distinctions](references/connections.md)
-- [Optional resources and ranked improvements](references/resources.md)
-- [Comparison with the source projects](references/source-comparison.md)
+- [Risk process and limitations](skills/day-trader-india/references/risk-process.md)
+- [Data and CLI schemas](skills/day-trader-india/references/data-and-tools.md)
+- [Broker connections and sandbox distinctions](skills/day-trader-india/references/connections.md)
+- [Optional resources and ranked improvements](skills/day-trader-india/references/resources.md)
+- [Comparison with the source projects](skills/day-trader-india/references/source-comparison.md)
 
 Design influences: [Jakeschincariol/day-trader-skill](https://github.com/Jakeschincariol/day-trader-skill) and [Jakeschincariol/trader-skill](https://github.com/Jakeschincariol/trader-skill). This repository contains the India-specific implementation; it does not bundle the separately installed US skill collection. US tax, SEC and congressional-disclosure logic is not treated as Indian-market functionality.
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Company Analyst"
+  short_description: "Analyze Indian filings with point-in-time data"
+  default_prompt: "Use $india-analyst to analyze my Indian company’s reported results with dated primary evidence."

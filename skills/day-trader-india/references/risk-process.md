@@ -2,6 +2,10 @@
 
 Contents: [Losses](#loss-free-trading-is-not-achievable), [Practice limits](#initial-virtual-practice-configuration), [Entry review](#before-an-entry-go--no-trade--data-block), [Evaluation](#test-before-considering-any-live-project).
 
+Use [the guardrails reference](guardrails.md) for the exact code/manual/unsupported
+matrix, version-3 forward ceilings, dated evidence schema, global entry halt,
+loss cooldown, checksum limitations and credential/reporting rules.
+
 ## Loss-free trading is not achievable
 
 State this once when the user asks to avoid every loss: no model, signal,
@@ -36,8 +40,9 @@ unique event IDs and explicit fee/slippage assumptions. Loss-streak/drawdown
 stops persist across days. It has no automatic reset or resume command.
 `pause --reason TEXT` blocks buys and leaves sells available. Review results
 before changing policy; never erase losses or restart a book to improve a record.
-For older books without version-2 controls, preserve them as archived records
-and initialize a separate, explicitly linked practice period.
+Older forward books, including version 2, cannot accept new forward entries;
+valid exits remain available. Preserve them and initialize a separate,
+explicitly linked version-3 practice period without erasing losses.
 
 Closed-trade drawdown is not current mark-to-market drawdown. An open position
 may be losing more than its recorded stop risk. The journal has no streaming
@@ -48,7 +53,11 @@ describe the journal as a protective trading system.
 
 Read the current quote, book state, instrument master and current exchange
 information. Missing material evidence means DATA BLOCK, never assumed clear.
-These checks require evidence review; not all are executable code gates.
+These checks require evidence review. Version-3 forward buys require dated
+JSON attestations with sources through `--evidence`; the journal validates
+their shape, timestamps, session window and bid/ask spread, not their truth.
+Use the [failing evidence template](../assets/pretrade-evidence.template.json)
+and the [exact schema](guardrails.md#supply-dated-pre-trade-evidence).
 
 | Check | Evidence and decision |
 | --- | --- |
@@ -64,8 +73,9 @@ These checks require evidence review; not all are executable code gates.
 | Behaviour | No averaging down, martingale, revenge trades, moving stops away, chasing gaps or increasing size to recover losses. Respect pause/loss-streak/drawdown stops. |
 
 Quote freshness and accounting checks are code-enforced by the paper journal.
-The supplied scanner/replay does not automatically fetch or enforce current
-surveillance, news, circuit, spread, sector or correlation facts. Never say
+The forward journal checks the supplied bid/ask against a 20 bps spread ceiling.
+The supplied tools do not automatically fetch or verify current surveillance,
+news, circuit, liquidity, sector or correlation facts. Never say
 these checks have passed without obtaining and reviewing the evidence.
 
 Official surveillance sources:

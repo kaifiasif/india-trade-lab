@@ -1,0 +1,4 @@
+interface:
+  display_name: "India News Reviewer"
+  short_description: "Review dated NSE/BSE news and event evidence"
+  default_prompt: "Use $india-news to review current official news and material-event evidence for my Indian stock."

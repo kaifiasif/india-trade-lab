@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Trade Lab Developer"
+  short_description: "Maintain code quality and clear trading documentation"
+  default_prompt: "Use $india-trade-dev to improve India Trade Lab and verify code, docs and portable skills."

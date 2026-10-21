@@ -1,0 +1,14 @@
+{
+  "name": "india-trade-lab",
+  "owner": {
+    "name": "Kaifi Asif"
+  },
+  "plugins": [
+    {
+      "name": "india-trade-lab",
+      "source": "./",
+      "description": "Indian cash-equity research and paper trading: coordinator, twelve specialists and developer standards. No live orders.",
+      "category": "productivity"
+    }
+  ]
+}

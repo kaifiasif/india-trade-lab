@@ -1,0 +1,4 @@
+interface:
+  display_name: "India On-Demand Observations"
+  short_description: "Check price conditions only when requested"
+  default_prompt: "Use $india-alerts to check this Indian price or session condition once using dated evidence."

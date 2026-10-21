@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+exclude = ["dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["broker_data", "india_research", "paper_book", "skill_tools"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

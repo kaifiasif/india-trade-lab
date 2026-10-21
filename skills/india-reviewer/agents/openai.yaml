@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Independent Review Veto"
+  short_description: "Veto inconsistent evidence and paper proposals"
+  default_prompt: "Use $india-reviewer to independently review these Indian research handoffs and veto unresolved issues."

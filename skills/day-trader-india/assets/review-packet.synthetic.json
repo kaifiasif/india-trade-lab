@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "mode": "synthetic",
+  "workflow": "intraday",
+  "run_id": "synthetic-block-example",
+  "symbol": "NSE:DEMO",
+  "as_of": "2026-10-19T10:00:00+05:30",
+  "proposal": {
+    "symbol": "NSE:DEMO",
+    "side": "buy",
+    "qty": 1,
+    "price_inr": "100",
+    "stop_inr": "98",
+    "as_of": "2026-10-19T10:00:00+05:30",
+    "source": "SYNTHETIC TEST ONLY",
+    "fee_inr": "10",
+    "exit_fee_reserve_inr": "10",
+    "slippage_bps": "5",
+    "event_id": "demo-proposal",
+    "book": "SYNTHETIC_BOOK_ONLY"
+  },
+  "reports": [
+    {
+      "schema_version": 1,
+      "run_id": "synthetic-block-example",
+      "symbol": "NSE:DEMO",
+      "as_of": "2026-10-19T10:00:00+05:30",
+      "role": "india-data",
+      "decision": "DATA_BLOCK",
+      "summary": "Synthetic refusal example; no verified current evidence",
+      "evidence": [],
+      "blockers": [
+        "Obtain independently verified market evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "run_id": "synthetic-block-example",
+      "symbol": "NSE:DEMO",
+      "as_of": "2026-10-19T10:00:00+05:30",
+      "role": "india-news",
+      "decision": "DATA_BLOCK",
+      "summary": "Synthetic refusal example; no verified current evidence",
+      "evidence": [],
+      "blockers": [
+        "Obtain independently verified market evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "run_id": "synthetic-block-example",
+      "symbol": "NSE:DEMO",
+      "as_of": "2026-10-19T10:00:00+05:30",
+      "role": "india-screener",
+      "decision": "DATA_BLOCK",
+      "summary": "Synthetic refusal example; no verified current evidence",
+      "evidence": [],
+      "blockers": [
+        "Obtain independently verified market evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "run_id": "synthetic-block-example",
+      "symbol": "NSE:DEMO",
+      "as_of": "2026-10-19T10:00:00+05:30",
+      "role": "india-budget",
+      "decision": "DATA_BLOCK",
+      "summary": "Synthetic refusal example; no verified current evidence",
+      "evidence": [],
+      "blockers": [
+        "Obtain independently verified market evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "run_id": "synthetic-block-example",
+      "symbol": "NSE:DEMO",
+      "as_of": "2026-10-19T10:00:00+05:30",
+      "role": "india-risk",
+      "decision": "DATA_BLOCK",
+      "summary": "Synthetic refusal example; no verified current evidence",
+      "evidence": [],
+      "blockers": [
+        "Obtain independently verified market evidence"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "run_id": "synthetic-block-example",
+      "symbol": "NSE:DEMO",
+      "as_of": "2026-10-19T10:00:00+05:30",
+      "role": "india-reviewer",
+      "decision": "DATA_BLOCK",
+      "summary": "Synthetic refusal example; no verified current evidence",
+      "evidence": [],
+      "blockers": [
+        "Obtain independently verified market evidence"
+      ]
+    }
+  ]
+}

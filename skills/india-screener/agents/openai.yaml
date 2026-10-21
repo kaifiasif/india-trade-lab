@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Research Screener"
+  short_description: "Screen Indian equities without look-ahead bias"
+  default_prompt: "Use $india-screener to build an evidence-backed Indian cash-equity research watchlist."

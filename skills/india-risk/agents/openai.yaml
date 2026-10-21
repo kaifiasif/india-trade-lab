@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Risk Veto"
+  short_description: "Veto unsupported or over-limit paper entries"
+  default_prompt: "Use $india-risk to check and, if needed, veto this virtual Indian cash-equity entry."

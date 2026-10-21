@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Manual Paper Journal"
+  short_description: "Prepare reviewed virtual-fill tickets only"
+  default_prompt: "Use $india-paper-broker to prepare an exact reviewed virtual-fill ticket for the coordinator."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Ownership Disclosures"
+  short_description: "Compare lagged Indian ownership disclosures"
+  default_prompt: "Use $india-disclosures to compare official Indian ownership disclosures and explain their lag."
