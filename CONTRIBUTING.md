@@ -30,3 +30,19 @@ and limitations in the PR. Never commit tokens, exports, journal databases or
 logs. GitHub Actions runs offline checks on Python 3.10 and 3.12 and uploads the
 skill packages; see the workflow for the exact commands. Passing CI does not
 demonstrate profitable trading or verified broker access.
+
+The observatory uses native browser modules and CSS; it has no frontend runtime
+package dependency. Format its HTML, CSS and JavaScript with pinned Prettier:
+
+```bash
+npm exec --yes --package=prettier@3.6.2 -- prettier --write \
+  'skills/day-trader-india/assets/observatory/*.{html,css,js}'
+npm exec --yes --package=prettier@3.6.2 -- prettier --parser html --write \
+  skills/day-trader-india/assets/observatory/mascot.svg
+node --check skills/day-trader-india/assets/observatory/app.js
+```
+
+Browser checks should cover stage selection, call inspection, filters, empty and
+connection-error states, keyboard access, reduced motion and a narrow viewport.
+The Python API tests exercise actual synthetic replays and reject unauthorized
+control requests. Keep archived previews clearly distinct from a connected engine.
