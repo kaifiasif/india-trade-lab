@@ -1,4 +1,6 @@
 # Operator-edited example. Create paths/user/config and private env file first.
+# --refresh-india re-reads mapped broker quotes/candles each poll; without it every
+# run reads a static quotes.json, which goes stale and blocks all proposals.
 [Unit]
 Description=India Trade Lab paper research worker
 After=network-online.target
@@ -11,7 +13,7 @@ Group=trade-lab
 WorkingDirectory=/opt/india-trade-lab
 EnvironmentFile=/etc/india-trade-lab.env
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/usr/bin/python3 /opt/india-trade-lab/scripts/market_service.py --config /var/lib/india-trade-lab/pipeline.json --crypto-symbols BTCUSDT,ETHUSDT
+ExecStart=/usr/bin/python3 /opt/india-trade-lab/scripts/market_service.py --config /var/lib/india-trade-lab/pipeline.json --refresh-india --crypto-symbols BTCUSDT,ETHUSDT
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=30

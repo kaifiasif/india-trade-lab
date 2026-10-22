@@ -115,7 +115,8 @@ schema, no stored response, bounded tokens/time/bytes and redacted failures.
 Instructions and market evidence are sent to the configured API provider.
 
 Default model budget: 60 reserved calls per IST date, six per candidate,
-maximum three candidates per run. The optional ten-role workflow reserves ten calls per candidate. Failed requests consume reserved capacity;
+maximum three candidates per run, reviewed concurrently because every review
+must finish inside the run's 120-second observation window. The optional ten-role workflow reserves ten calls per candidate. Failed requests consume reserved capacity;
 there are no retries. This is a call/token bound, not an exact rupee cost cap.
 The service does not change model or limits to recover a failed decision.
 

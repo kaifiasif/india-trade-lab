@@ -169,10 +169,17 @@ class RoutedReviewer:
             route = overrides.get(role, {"provider": provider, "model": default})
             if not isinstance(route, dict) or set(route) != {"provider", "model"}:
                 raise ValueError("Each role route needs provider and model only")
+            # Only OpenAI identifiers may contain ":"; the other clients reject it at call
+            # time, so refuse such a route at startup instead of failing every review.
+            allowed = (
+                r"[A-Za-z0-9_.:-]{1,100}"
+                if route["provider"] == "openai"
+                else (r"[A-Za-z0-9_.-]{1,100}")
+            )
             if (
                 route["provider"] not in ("openai", "anthropic", "gemini")
                 or not isinstance(route["model"], str)
-                or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", route["model"])
+                or not re.fullmatch(allowed, route["model"])
             ):
                 raise ValueError("Unsupported role provider or model identifier")
             self.routes[role] = dict(route)

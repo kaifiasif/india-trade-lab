@@ -51,9 +51,23 @@ class HistoryStore:
         )
         accepted, rejected = [], []
         now = dt.datetime.now(dt.timezone.utc).isoformat()
+        declared = manifest.get("sessions", {})
         with sqlite3.connect(self.path) as conn:
             for date in dates:
-                times = india_research.session(manifest, date)
+                if str(date) in declared and declared[str(date)] is None:
+                    # Explicit closure (the router's convention): not a trading session,
+                    # so it is neither imported nor counted as a missing declared session.
+                    reason = "Declared exchange closure"
+                    if any(row["t"].date() == date for row in rows):
+                        reason += "; bars on a closed date were ignored"
+                    rejected.append({"date": str(date), "reason": reason})
+                    continue
+                try:
+                    times = india_research.session(manifest, date)
+                except ValueError as exc:
+                    # One undeclared or invalid date blocks that date only, not the import.
+                    rejected.append({"date": str(date), "reason": str(exc)})
+                    continue
                 if times["close"] > as_of:
                     rejected.append({"date": str(date), "reason": "Session not complete at cutoff"})
                     continue

@@ -23,7 +23,7 @@ from engine import (
     Phase,
     Quote,
 )
-from paper_book import create
+from paper_book import create, fill
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "skills/day-trader-india/assets"
@@ -306,15 +306,59 @@ class EngineTests(unittest.TestCase):
 
 
 class RecoveryRegressionTests(unittest.TestCase):
-    def test_reconciliation_blocks_same_symbol_with_different_quantity(self):
-        runner, broker, _ = build()
+    def test_quantity_mismatch_halts_entries_but_stop_exits_held_shares(self):
+        runner, broker, alerts = build()
         enter(runner)
         with patch.object(broker, "positions", return_value={SYMBOL: 5}):
             self.assertFalse(runner.reconcile())
-            result = runner.on_quote(quote("10:05", "97"), at("10:05"))
-        self.assertEqual(result, [])
-        self.assertEqual(len(broker.book["events"]), 1)
+            submitted = []
+            original = broker.submit
+            with patch.object(
+                broker,
+                "submit",
+                side_effect=lambda order, *rest: submitted.append(order) or original(order, *rest),
+            ):
+                [result] = runner.on_quote(quote("10:05", "97"), at("10:05"))
+        self.assertEqual(result.status, "filled")
+        self.assertEqual(submitted[0].qty, 5)  # Never more than the broker holds.
+        self.assertIn("manual_attention", alerts)
+        self.assertEqual(runner.phase, Phase.HALTED)  # Entries stay blocked for review.
+
+    def test_mismatch_on_another_symbol_never_blocks_a_stop_exit(self):
+        book = create("100000", "NSE:AAA,NSE:BBB", "250", "750", "15000", replay=True, max_open=2)
+        broker = PaperBroker(book, Decimal(5))
+
+        class Both:
+            pending = {"NSE:AAA", "NSE:BBB"}
+
+            def on_quote(self, q, context):
+                if q.symbol in self.pending:
+                    self.pending.discard(q.symbol)
+                    return EntryIntent(q.symbol, 10, Decimal(98), Decimal(106), "fixture")
+                return None
+
+        config = EngineConfig(("NSE:AAA", "NSE:BBB"), Decimal(5), Decimal(10), Decimal(5))
+        runner = Engine(config, SESSION, broker, Both(), notifier=lambda *_: None)
+        runner.on_quote(quote("10:00", "100", symbol="NSE:AAA"), at("10:00"))
+        runner.on_quote(quote("10:00", "100", symbol="NSE:BBB"), at("10:00"))
+        # A manual journal exit outside the engine leaves the engine out of sync on BBB.
+        broker.book = fill(
+            broker.book, "sell", "manual-1", "NSE:BBB", "100", at("10:01").isoformat(),
+            "SYNTHETIC TEST ONLY", "10", "5", now=at("10:01"),
+        )  # fmt: skip
+        bar = quote("10:02", "95", symbol="NSE:AAA", open="96", high="96", low="95")
+        [result] = runner.on_quote(bar, at("10:02"))
+        self.assertEqual(result.status, "filled")
+        self.assertEqual(broker.positions(), {})
         self.assertEqual(runner.phase, Phase.HALTED)
+
+    def test_exit_when_broker_holds_nothing_drops_the_trade_with_an_alert(self):
+        runner, broker, alerts = build()
+        enter(runner)
+        with patch.object(broker, "positions", return_value={}):
+            self.assertEqual(runner.on_quote(quote("10:05", "97"), at("10:05")), [])
+        self.assertEqual(runner.trades, {})
+        self.assertIn("manual_attention", alerts)
 
     def test_stale_snapshot_cannot_erase_an_external_journal_fill(self):
         with tempfile.TemporaryDirectory() as temporary:

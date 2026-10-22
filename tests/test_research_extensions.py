@@ -114,6 +114,13 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(reviewer.routes["india-bear"]["provider"], "anthropic")
         with self.assertRaises(ValueError):
             RoutedReviewer({**config, "model_routes": {"unknown": {}}})
+        # A ":" is valid for OpenAI identifiers only; other providers are refused at startup.
+        with patch.dict("os.environ", {}, clear=True):
+            RoutedReviewer({**config, "model_routes": {"india-bull": {"provider": "openai", "model": "ft:x:y"}}})  # fmt: skip
+        for provider in ("anthropic", "gemini"):
+            route = {"india-bull": {"provider": provider, "model": "ft:x:y"}}
+            with self.assertRaises(ValueError):
+                RoutedReviewer({**config, "model_routes": route})
         with patch.dict("os.environ", {}, clear=True), self.assertRaises(ValueError):
             reviewer.review("india-bear", context(), [])
 
