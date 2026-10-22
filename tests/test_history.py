@@ -120,6 +120,34 @@ class HistoryTests(unittest.TestCase):
             self.assertFalse(coverage["history_ready"])
             self.assertEqual(coverage["missing_declared_sessions"], [str(dates[30])])
 
+    def test_null_closure_dates_are_skipped_not_fatal_or_counted_as_gaps(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            bars, sessions, dates = fixtures(directory)
+            manifest = json.loads(sessions.read_text())
+            # Router convention from daily-service.md: an explicit null marks a closure.
+            holiday = dates[20] + dt.timedelta(days=1)
+            while str(holiday) in manifest["sessions"]:
+                holiday += dt.timedelta(days=1)
+            manifest["sessions"][str(holiday)] = None
+            # An undeclared date in the bars must block only that date.
+            stray = dates[-1] + dt.timedelta(days=1)
+            with bars.open("a", newline="") as stream:
+                csv.writer(stream).writerow(
+                    ("NSE:TEST", f"{stray}T09:15:00+05:30", 1, 1, 1, 1, 1, "OFFLINE_TEST_PROVIDER")
+                )
+            sessions.write_text(json.dumps(manifest))
+            store = HistoryStore(directory / "history.sqlite")
+            cutoff = dt.datetime.combine(stray, dt.time(16), tzinfo=IST)
+            result = store.ingest(bars, sessions, "NSE:TEST", "broker_export", cutoff)
+            self.assertEqual(len(result["accepted"]), 50)
+            reasons = {item["date"]: item["reason"] for item in result["rejected"]}
+            self.assertEqual(reasons[str(holiday)], "Declared exchange closure")
+            self.assertIn("Unknown/closed session", reasons[str(stray)])
+            coverage = store.coverage("NSE:TEST", cutoff)
+            self.assertTrue(coverage["history_ready"], coverage)
+            self.assertEqual(coverage["missing_declared_sessions"], [])
+
     def test_conflicting_revision_is_refused_and_unfinished_sessions_are_excluded(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

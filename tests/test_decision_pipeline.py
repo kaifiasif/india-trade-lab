@@ -5,8 +5,10 @@ import datetime as dt
 import json
 import sqlite3
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from decision_pipeline import DEFAULT_CONFIG, DailyCoordinator, DecisionStore, goal_report
 from history import HistoryStore
@@ -200,6 +202,31 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(
                 goal_report(None, "80000", dt.datetime.now(IST))["shortfall_inr"], "80000"
             )
+
+    def test_shortlisted_candidates_are_reviewed_concurrently_in_ranked_order(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            coordinator, now = setup(Path(temporary))
+            ranked = ["NSE:AAA", "NSE:BBB", "NSE:CCC"]
+            # Each fake review waits until all three overlap. Sequential reviews would
+            # break the barrier, which mirrors expiring the shared 120-second window.
+            barrier = threading.Barrier(len(ranked), timeout=5)
+
+            def evaluate(symbol, *_):
+                try:
+                    barrier.wait()
+                    decision = "WAIT"
+                except threading.BrokenBarrierError:
+                    decision = "DATA_BLOCK"
+                return {"symbol": symbol, "decision": decision, "reasons": []}
+
+            shortlist = {"candidates": [{"symbol": symbol} for symbol in ranked]}
+            with (
+                patch("decision_pipeline.build_watchlist", return_value=shortlist),
+                patch.object(coordinator, "evaluate", side_effect=evaluate),
+            ):
+                report = coordinator.run_once()
+            self.assertEqual([call["symbol"] for call in report["calls"]], ranked)
+            self.assertEqual({call["decision"] for call in report["calls"]}, {"WAIT"})
 
 
 if __name__ == "__main__":

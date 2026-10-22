@@ -505,9 +505,27 @@ class Engine:
             price, reason = quote.bid, "square_off"
         else:
             return None
-        if not self.reconcile():
+        # Any mismatch halts new entries, but a protective exit must still run: refusing
+        # it would leave a position open below its stop. Exit only shares this engine
+        # manages and the broker actually holds; never sell shares held outside the engine.
+        self.reconcile()
+        managed = int(trade["qty"])
+        held = self.broker.positions().get(quote.symbol, 0)
+        qty = min(managed, held)
+        if qty != managed:
+            self._record(
+                "manual_attention",
+                alert=True,
+                symbol=quote.symbol,
+                reason=(
+                    f"Exit quantity adjusted: engine manages {managed}, broker holds {held}"
+                    if qty > 0
+                    else "Broker holds none of this engine-managed position; nothing to exit"
+                ),
+            )
+        if qty <= 0:
+            self.trades.pop(quote.symbol)
             return None
-        qty = int(trade["qty"])
         self._record("decision", symbol=quote.symbol, side="sell", qty=qty, reason=reason)
         order = Order(
             client_order_id=trade["entry_id"] + ":X",

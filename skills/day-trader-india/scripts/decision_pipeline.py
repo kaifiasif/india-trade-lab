@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import datetime as dt
 import hashlib
 import json
@@ -366,21 +367,33 @@ class DailyCoordinator:
                     bars = india_research.bars_from_csv(self.path("bars"))
                     pretrade = read_json(self.path("pretrade_evidence"))
                     evidence = read_json(self.path("research_evidence"))
-                    for candidate in shortlist["candidates"]:
-                        if candidate["symbol"] not in book["positions"]:
-                            report["calls"].append(
-                                self.evaluate(
-                                    candidate["symbol"],
-                                    book,
-                                    history,
-                                    sessions,
-                                    bars,
-                                    quotes,
-                                    pretrade,
-                                    evidence,
-                                    run_id,
-                                )
+                    symbols = [
+                        candidate["symbol"]
+                        for candidate in shortlist["candidates"]
+                        if candidate["symbol"] not in book["positions"]
+                    ]
+                    # Every review is bound to this run's 120-second observation window.
+                    # Reviewing candidates one after another would expire all but the first,
+                    # so review them concurrently and keep the shortlist's ranking order.
+                    with concurrent.futures.ThreadPoolExecutor(
+                        max_workers=max(1, len(symbols))
+                    ) as pool:
+                        futures = [
+                            pool.submit(
+                                self.evaluate,
+                                symbol,
+                                book,
+                                history,
+                                sessions,
+                                bars,
+                                quotes,
+                                pretrade,
+                                evidence,
+                                run_id,
                             )
+                            for symbol in symbols
+                        ]
+                        report["calls"].extend(future.result() for future in futures)
                 except (ValueError, KeyError, TypeError, OSError, sqlite3.Error):
                     report["blockers"].append(
                         "Entry research inputs are incomplete; existing exit reviews retained"

@@ -40,8 +40,10 @@ A rejected exit halts the engine for manual review.
   not allowlisted are logged as `quote_rejected` and never reach the strategy.
 - `tick` halts entries when no valid quote has arrived within
   `heartbeat_timeout_seconds`, and raises `manual_attention` if positions are open.
-- `reconcile` compares symbols **and quantities**. A mismatch halts entries and
-  refuses an exit whose quantity cannot be reconciled; inspect the book manually.
+- `reconcile` compares symbols **and quantities**. Any mismatch halts new entries
+  and alerts. Protective exits still run: they sell the smaller of the engine-managed
+  and broker-held quantity (never shares held outside the engine) and raise
+  `manual_attention` when those differ. Inspect the book before resuming entries.
 - `INDIA_TRADE_LAB_HALT=1` blocks entries in both the gate and the journal.
 - `EngineConfig.digest()` is stored on every order record. `restore` refuses a
   snapshot made under a different configuration, full session boundaries or
