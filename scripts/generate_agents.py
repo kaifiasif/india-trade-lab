@@ -110,6 +110,21 @@ def generate_profiles(root: Path = ROOT, *, check: bool = False) -> list[Path]:
         for path, content in expected.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8", newline="\n")
+    runtime_path = root / "skills/day-trader-india/assets/role-instructions.json"
+    runtime = (
+        json.dumps(
+            {name: HANDOFF_RULES + "\n" + read_role(name, root)[1] + "\n" for name in ROLE_SKILLS},
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n"
+    )
+    if check:
+        if not runtime_path.is_file() or runtime_path.read_text(encoding="utf-8") != runtime:
+            raise ValueError("Stale model role instructions; run scripts/generate_agents.py")
+    else:
+        runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        runtime_path.write_text(runtime, encoding="utf-8", newline="\n")
     return list(expected)
 
 

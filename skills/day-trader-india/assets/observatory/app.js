@@ -368,7 +368,7 @@ function renderRisk() {
                     `<div class="risk-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`,
             )
             .join("") +
-        '<div class="risk-connections"><span>NSE · synthetic replay</span><span>Binance · not connected</span><span>Other exchanges · not connected</span></div>';
+        `<div class="risk-connections"><span>NSE · synthetic replay</span><span>Binance · ${state?.research?.crypto?.length ? "recorded public data" : "not configured"}</span><span>Real orders · disabled</span></div>`;
     $("specialists").innerHTML = (
         state?.agents?.slice(5) || [
             { name: "News analyst" },
@@ -423,6 +423,86 @@ function renderWatchlist() {
           "</div>"
         : `<div class="watchlist-empty"><span>◎</span><div><strong>Market inputs needed</strong><p>${esc(watchlist.reason || "No instruments passed the current history and liquidity checks.")}</p><small>${watchlist.blocked?.length || 0} instruments blocked · no stock picks invented</small></div></div>`;
 }
+function renderResearch() {
+    const research = state?.research || {},
+        report = research.report;
+    $("research-status").textContent = report
+        ? (report.archived ? "ARCHIVED · " : "") +
+          readable(report.status).toUpperCase()
+        : "DATA REQUIRED";
+    if (report?.goal)
+        $("research-goal").textContent =
+            `Daily goal ${money(report.goal.daily_target_inr)} · recorded today ${money(report.goal.realized_today_inr)} · goal never changes risk or quantity.`;
+    const roles = [
+        "india-data",
+        "india-news",
+        "india-screener",
+        "india-budget",
+        "india-risk",
+        "india-reviewer",
+    ];
+    const events = research.events || [];
+    $("research-content").innerHTML = report
+        ? `<div class="research-flow">${roles
+              .map((role) => {
+                  const matching = events.filter((item) => item.role === role),
+                      last = matching.at(-1);
+                  return `<button class="research-role" data-role="${esc(role)}"><small>${esc(role.replace("india-", ""))}</small><strong>${esc(last?.decision || (last ? readable(last.kind) : "IDLE"))}</strong></button>`;
+              })
+              .join("")}</div><div class="research-calls">${
+              (report.calls || [])
+                  .map(
+                      (call, index) =>
+                          `<button class="research-call" data-research-call="${index}"><strong>${esc(call.symbol)}</strong><span>${esc(readable(call.decision))}${report.archived ? " · ARCHIVED" : ""}</span><small>${esc(call.reasons?.join(" · "))}</small></button>`,
+                  )
+                  .join("") ||
+              `<p class="empty">${esc(report.blockers?.join(" · ") || "No current proposals")}</p>`
+          }</div><p class="section-note">${esc(report.as_of || "Review in progress")} · ${esc(report.provider || "provider not recorded")} · no fills or real orders sent</p>`
+        : '<p class="empty">Start the local research service with a forward paper book, sourced feeds and a configured model. No agent reviews have been invented.</p>';
+    $("research-content")
+        .querySelectorAll("[data-role]")
+        .forEach((button) =>
+            button.addEventListener("click", () =>
+                showDetails(button.dataset.role, {
+                    events: events.filter(
+                        (item) => item.role === button.dataset.role,
+                    ),
+                    reports: (report.calls || [])
+                        .flatMap(
+                            (call) => call.agent_review?.packet?.reports || [],
+                        )
+                        .filter((item) => item.role === button.dataset.role),
+                }),
+            ),
+        );
+    $("research-content")
+        .querySelectorAll("[data-research-call]")
+        .forEach((button) =>
+            button.addEventListener("click", () =>
+                showDetails(
+                    "Recorded research proposal",
+                    report.calls[Number(button.dataset.researchCall)],
+                ),
+            ),
+        );
+    const service = research.service;
+    $("market-sessions").innerHTML = service
+        ? `<div class="market-sessions">${(service.markets || [])
+              .map(
+                  (item) =>
+                      `<div><strong>${esc(item.market.toUpperCase())}</strong><span>${esc(item.status)}${service.stale ? " · stale worker" : ""}</span><small>${esc(readable(item.capability))}</small></div>`,
+              )
+              .join("")}</div>`
+        : '<p class="section-note">Worker offline or not configured · US execution is not implemented.</p>';
+    $("crypto-observations").innerHTML = (research.crypto || []).length
+        ? `<div class="market-sessions">${research.crypto
+              .map(
+                  (item) =>
+                      `<div><strong>${esc(item.symbol)} <small>USDT SPOT</small></strong><span>${esc(item.pattern)}${item.stale ? " · STALE" : ""}</span><small>${esc(item.history_days)} complete daily candles · ${esc(item.received_at)} · research only</small></div>`,
+              )
+              .join("")}</div>`
+        : '<p class="section-note">Crypto data collection is opt in. No crypto paper ledger or execution is connected.</p>';
+}
 function render() {
     const metrics = state?.metrics || {};
     $("equity").textContent = money(metrics.equity_inr);
@@ -445,12 +525,12 @@ function render() {
             ? "No exchange account connected"
             : `${metrics.fills} assumed fills · virtual INR`;
     $("source-title").textContent = preview
-        ? "Synthetic session · archived preview"
+        ? "Archived observatory preview"
         : connected
           ? "Local paper engine connected"
           : "Engine connection interrupted";
     $("source-detail").textContent = preview
-        ? "Exported replay, not a live market feed. Connect locally to run."
+        ? "Synthetic replay and recorded observations · no live feed. Connect locally to run."
         : connected
           ? "Backend events update every second · synthetic replay"
           : "Last recorded state shown. Controls disabled until reconnection.";
@@ -497,6 +577,7 @@ function render() {
     renderRisk();
     renderHistory();
     renderWatchlist();
+    renderResearch();
 }
 async function initialize() {
     try {

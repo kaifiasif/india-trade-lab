@@ -1,0 +1,26 @@
+# Operator-edited example. Create paths/user/config and private env file first.
+[Unit]
+Description=India Trade Lab paper research worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trade-lab
+Group=trade-lab
+WorkingDirectory=/opt/india-trade-lab
+EnvironmentFile=/etc/india-trade-lab.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/india-trade-lab/scripts/market_service.py --config /var/lib/india-trade-lab/pipeline.json --crypto-symbols BTCUSDT,ETHUSDT
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/india-trade-lab
+
+[Install]
+WantedBy=multi-user.target

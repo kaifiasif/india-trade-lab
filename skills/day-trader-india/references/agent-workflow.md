@@ -8,6 +8,12 @@ Use `day-trader-india` as the coordinator and runtime. Delegate bounded research
 to these installed role skills, or run their procedures sequentially if the
 host cannot launch subagents. Do not claim independent agents ran in that case.
 
+The optional [daily service](daily-service.md) executes the intraday dependency
+graph with six separately prompted, evidence-bound model calls. Its default
+provider is disabled. Native host delegation and this Python runtime are
+different invocation paths; both use the same role instructions and handoff
+contract. Only persisted, valid provider responses count as model reviews.
+
 | Role skill | Responsibility | Current implementation |
 | --- | --- | --- |
 | `india-data` | Instrument/data provenance, session and quote quality | Read-only Kite/Upstox historical adapter and local validation; current quotes supplied separately |

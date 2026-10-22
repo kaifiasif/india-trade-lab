@@ -19,12 +19,14 @@ or use the Python CLI below.
 - Dated research shortlists from a sourced active-EQ universe, complete history and prior traded-value checks; current setups still need confirmation.
 - Fifty-session historical coverage checks for forward engine entries; synthetic history never satisfies that gate.
 - Fourteen portable skills, optional native Claude/Codex specialist profiles, synthetic examples and offline regression tests.
+- A persistent daily research coordinator with six evidence-bound model roles, vetoes, frozen paper proposals, audit events and a reporting-only ₹80,000 goal.
+- A session router for India/US timezones and optional continuous read-only Binance spot collection. See [daily service setup](skills/day-trader-india/references/daily-service.md).
 
 The supplied opening-range rule is a test harness, not a proven trading strategy. A passing test verifies software behaviour, not investment performance.
 
 ## What is not running
 
-There is no continuous wall-clock runner, live quote stream, live broker order path, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
+The research worker must be explicitly configured and started. It can poll mapped broker quotes/current candles and collect public crypto data; it produces proposals, not automatic paper fills. There is no live quote stream, real broker order path, US trading adapter, crypto ledger, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
 
 The broker adapters are implemented but require an authorised account session, appropriate data entitlement and a verified symbol/instrument mapping. No account is connected by cloning this repository. Authenticated broker access has not been integration-tested in this project.
 
@@ -62,6 +64,10 @@ The dashboard has no exchange connection or live-order controls. Its five active
 stages are deterministic Python rules. Research skills that were not invoked are
 shown as idle. An exported hosted preview displays archived synthetic events;
 run the local backend for working replay controls.
+
+The daily research desk also reads persisted model handoffs, proposals, worker
+sessions and crypto observations when configured. These records are separate
+from synthetic replay fills. No model activity is fabricated for the preview.
 
 Books and event logs live under `data/observatory/` and are retained between runs.
 Historical coverage and import instructions are in [the observatory guide](docs/observatory.md).

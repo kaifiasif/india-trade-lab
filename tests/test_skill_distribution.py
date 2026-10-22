@@ -87,6 +87,12 @@ class SkillDistributionTests(unittest.TestCase):
                 "observatory.py",
                 "history.py",
                 "watchlist.py",
+                "decision_pipeline.py",
+                "crypto_data.py",
+                "data_sync.py",
+                "quote_data.py",
+                "market_router.py",
+                "market_service.py",
             ):
                 subprocess.run(
                     [sys.executable, str(skill / "scripts" / script), "--help"],
@@ -136,6 +142,12 @@ class SkillDistributionTests(unittest.TestCase):
             "observatory.py",
             "history.py",
             "watchlist.py",
+            "decision_pipeline.py",
+            "crypto_data.py",
+            "data_sync.py",
+            "quote_data.py",
+            "market_router.py",
+            "market_service.py",
         ):
             with self.subTest(script=name):
                 subprocess.run(

@@ -66,7 +66,11 @@ Use `--data-dir` to select private persistent storage and `--port` for another
 local port. Back up the history database and each run database. A hosted static
 preview can be exported with `--export-preview FILE`; it contains synthetic
 replay events, has no connected backend, and its run controls point to local setup.
-Binance/crypto adapters and autonomous LLM research remain unimplemented.
+The daily research desk reads saved coordinator handoffs, final proposals,
+worker routes and read-only crypto snapshots when present. See
+[daily service setup](../skills/day-trader-india/references/daily-service.md).
+Model reviews and authenticated broker access require private configuration.
+The static preview does not run the service.
 
 ## How a stock reaches the shortlist
 
@@ -112,5 +116,6 @@ For a running allowlisted paper session, the current strategy proposes a long
 entry after a complete opening range and a later completed close above its high.
 Stops, targets and square-off rules generate sell exits. Risk and journal checks
 can refuse entries. News, disclosures and surveillance evidence are still required
-for forward paper practice; those research agents are not automatically called.
+for forward paper practice. The separately configured daily service can call six
+research roles on supplied evidence and retain their vetoes and proposals.
 The system has no short-selling or real-exchange execution path.

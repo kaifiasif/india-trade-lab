@@ -40,6 +40,68 @@ STAGES = (
 )
 
 
+def research_state(directory: Path) -> dict:
+    """Read worker records without starting models, collectors or changing journal state."""
+    result: dict[str, Any] = {"report": None, "events": [], "crypto": [], "service": None}
+    now = dt.datetime.now(dt.timezone.utc)
+    for filename, kind in (
+        ("decisions.sqlite", "report"),
+        ("crypto.sqlite", "crypto"),
+        ("service.sqlite", "service"),
+    ):
+        path = directory / filename
+        if not path.is_file():
+            continue
+        try:
+            with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2) as conn:
+                conn.execute("BEGIN")
+                if kind == "report":
+                    row = conn.execute(
+                        "SELECT id,report FROM runs ORDER BY started_at DESC LIMIT 1"
+                    ).fetchone()
+                    if row:
+                        result["report"] = (
+                            json.loads(row[1])
+                            if row[1]
+                            else {"run_id": row[0], "status": "IN_PROGRESS", "calls": []}
+                        )
+                        result["events"] = [
+                            json.loads(value[0])
+                            for value in conn.execute(
+                                "SELECT data FROM events WHERE run_id=? ORDER BY seq", (row[0],)
+                            )
+                        ]
+                        report = result["report"]
+                        report["archived"] = (
+                            not report.get("as_of")
+                            or (now - paper_book.timestamp(report["as_of"])).total_seconds() > 120
+                        )
+                        report["display_notice"] = (
+                            "Recorded research; every proposal requires fresh validation before a manual paper fill"
+                        )
+                elif kind == "crypto":
+                    for row in conn.execute(
+                        "SELECT data FROM snapshots WHERE id IN "
+                        "(SELECT MAX(id) FROM snapshots GROUP BY symbol) ORDER BY symbol"
+                    ):
+                        snapshot = json.loads(row[0])
+                        snapshot.pop("candles", None)
+                        snapshot["stale"] = (
+                            now - paper_book.timestamp(snapshot["received_at"])
+                        ).total_seconds() > 1800
+                        result["crypto"].append(snapshot)
+                else:
+                    row = conn.execute("SELECT data FROM state WHERE id=1").fetchone()
+                    if row:
+                        result["service"] = json.loads(row[0])
+                        result["service"]["stale"] = (
+                            now - paper_book.timestamp(result["service"]["as_of"])
+                        ).total_seconds() > 180
+        except (OSError, sqlite3.Error, ValueError, KeyError, TypeError):
+            result[kind] = [] if kind == "crypto" else None
+    return result
+
+
 def read_run(path: Path) -> tuple[dict, dict | None, list[dict]]:
     """Read a consistent view without taking ownership of the engine's write version."""
     with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5) as conn:
@@ -231,12 +293,14 @@ class Observatory:
                     "agents": [],
                     "prices": [],
                     "positions": {},
+                    "research": research_state(self.directory),
                 }
             result = project_state(self.current, self.status)
             result["watchlist"] = self.watchlist()
             result["histories"] = self.histories()
             result["history"] = self.history.coverage("NSE:DEMO", dt.datetime.now(dt.timezone.utc))
             result["error"] = self.error
+            result["research"] = research_state(self.directory)
             return result
 
     def start(self, scenario: str) -> str:

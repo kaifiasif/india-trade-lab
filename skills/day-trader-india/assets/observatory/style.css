@@ -2091,3 +2091,94 @@ th {
         max-width: 200px;
     }
 }
+/* Persisted research reports and exchange routing, separate from replay fills. */
+.research-panel {
+    margin-bottom: 22px;
+}
+.research-flow {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 24px 20px;
+}
+.research-role {
+    padding: 14px 10px;
+    text-align: left;
+    border: 1px solid #e3def4;
+    border-radius: 12px;
+    background: #faf8ff;
+    color: #544373;
+    cursor: pointer;
+}
+.research-role small {
+    display: block;
+    text-transform: uppercase;
+    font-size: 10px;
+    margin-bottom: 7px;
+}
+.research-role strong {
+    font-size: 10px;
+    overflow-wrap: anywhere;
+}
+.research-calls {
+    padding: 0 24px;
+}
+.research-call {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    width: 100%;
+    gap: 8px;
+    padding: 16px;
+    margin-bottom: 10px;
+    text-align: left;
+    background: white;
+    border: 1px solid #e7e6ee;
+    border-radius: 10px;
+    cursor: pointer;
+    color: #34313e;
+}
+.research-call small {
+    grid-column: 1 / -1;
+    color: #716c81;
+}
+.market-sessions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0 24px 20px;
+}
+.market-sessions div {
+    padding: 14px;
+    border-radius: 10px;
+    background: #f7f7fa;
+}
+.market-sessions strong,
+.market-sessions span,
+.market-sessions small {
+    display: block;
+}
+.market-sessions strong {
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+.market-sessions span {
+    font-size: 11px;
+    color: #6f54a3;
+}
+.market-sessions small {
+    font-size: 10px;
+    line-height: 1.7;
+    margin-top: 5px;
+    color: #7c788c;
+}
+@media (max-width: 800px) {
+    .research-flow {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .market-sessions {
+        grid-template-columns: 1fr;
+    }
+    .research-call {
+        grid-template-columns: 1fr;
+    }
+}
