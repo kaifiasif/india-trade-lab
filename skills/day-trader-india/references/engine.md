@@ -40,12 +40,25 @@ A rejected exit halts the engine for manual review.
   not allowlisted are logged as `quote_rejected` and never reach the strategy.
 - `tick` halts entries when no valid quote has arrived within
   `heartbeat_timeout_seconds`, and raises `manual_attention` if positions are open.
-- `reconcile` compares broker and engine positions; a mismatch halts entries.
+- `reconcile` compares symbols **and quantities**. A mismatch halts entries and
+  refuses an exit whose quantity cannot be reconciled; inspect the book manually.
 - `INDIA_TRADE_LAB_HALT=1` blocks entries in both the gate and the journal.
 - `EngineConfig.digest()` is stored on every order record. `restore` refuses a
-  snapshot made under a different configuration or session date.
+  snapshot made under a different configuration, full session boundaries or
+  strategy parameters. ORB ranges and candle-grid state are restored.
 - The journal's own caps (per-trade risk, daily loss, position limit, trade
   count, loss streak, drawdown) still apply behind the gate.
+
+- Snapshot version 2 is required. Version 1 lacks strategy state and is refused;
+  preserve the old journal and begin a separate run rather than guessing recovery state.
+- Store saves compare the complete loaded database version under a write
+  transaction. An external journal or engine write causes a refusal, never an overwrite.
+- ORB requires a continuous grid of completed five-minute bars from the open.
+  Missing, duplicate or irregular observations block that symbol for the session.
+- Forward engine entries require a `HistoryStore.coverage` provider with at least
+  50 complete broker-export sessions at the exact decision cutoff. This adds a
+  data requirement; all existing pre-trade evidence and journal checks still apply.
+  Replay remains explicitly synthetic and cannot satisfy the forward-history gate.
 
 ## Replay CLI
 
@@ -74,3 +87,11 @@ Treat these as planned, untested work:
 - Partial exits, trailing stops, multi-symbol replay and mark-to-market P&L.
 - Any sandbox or live broker. Live execution remains a separate future project;
   see [connections.md](connections.md).
+
+## Local observatory
+
+Run `python3 SKILL_DIR/scripts/observatory.py --data-dir PROJECT/observatory` and
+open `http://127.0.0.1:8765`. The standard-library server serves its bundled UI
+and reads journal/event snapshots. Controls run only bundled synthetic scenarios.
+It binds to loopback, rejects unexpected Host/Origin headers and requires a
+per-process session token for writes. Do not expose it directly on a public port.

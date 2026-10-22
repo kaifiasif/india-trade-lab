@@ -62,7 +62,17 @@ def skill_files(name: str, root: Path = ROOT) -> list[Path]:
             continue
         if relative.parts[0] not in {"SKILL.md", "scripts", "references", "assets", "agents"}:
             raise ValueError(f"Unexpected skill resource: {relative}")
-        if path.suffix not in {".md", ".py", ".yaml", ".svg", ".csv", ".json"}:
+        if path.suffix not in {
+            ".md",
+            ".py",
+            ".yaml",
+            ".svg",
+            ".csv",
+            ".json",
+            ".html",
+            ".css",
+            ".js",
+        }:
             raise ValueError(f"Unexpected resource type: {relative}")
         files.append(path)
     return files

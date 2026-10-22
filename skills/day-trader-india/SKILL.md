@@ -218,3 +218,20 @@ Use the host's skill invocation syntax: `/day-trader-india` in Claude Code or
 name. If Python, file access or current data is unavailable, explain the
 missing capability and provide only the supported research guidance. Never
 invent tool output, installed connectors or an active background watcher.
+
+## Inspect recorded paper decisions
+
+Launch `python3 SKILL_DIR/scripts/observatory.py --data-dir PROJECT/observatory`
+for the local dashboard. Select a funnel stage or paper call to inspect persisted
+engine evidence. Research skills shown as idle did not run. The bundled replay
+has one synthetic session, not 50 days of observed market history.
+
+Use `scripts/history.py --help` to retain complete CSV sessions and inspect
+50-session coverage. Keep source kinds separate. Coverage is a research data
+requirement, not a trained model or proof of profitability. Read
+[history.md](references/history.md) before importing or interpreting history.
+
+Use `scripts/watchlist.py` with a privately sourced instrument master and retained
+broker history to build a dated liquidity-ranked research shortlist. Candidates
+are `WAIT_FOR_SETUP`, not approved buys. It does not fetch today's market or
+invoke news/reviewer skills automatically. Missing inputs yield no candidates.

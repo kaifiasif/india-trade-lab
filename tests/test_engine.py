@@ -3,6 +3,7 @@
 import datetime as dt
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -125,7 +126,7 @@ class EngineTests(unittest.TestCase):
         enter(engine)
         bar = quote("10:05", "101", open="100", high="107", low="97")
         [result] = engine.on_quote(bar, at("10:05"))
-        self.assertEqual(engine.log[-1]["reason"], "stop")
+        self.assertEqual([e for e in engine.log if e["kind"] == "order"][-1]["reason"], "stop")
         self.assertEqual(result.status, "filled")
         self.assertEqual(broker.positions(), {})
 
@@ -140,7 +141,7 @@ class EngineTests(unittest.TestCase):
         engine, broker, _ = build()
         enter(engine)
         engine.on_quote(quote("10:05", "105", open="104", high="106.5", low="103"), at("10:05"))
-        self.assertEqual(engine.log[-1]["reason"], "target")
+        self.assertEqual([e for e in engine.log if e["kind"] == "order"][-1]["reason"], "target")
         engine, broker, _ = build()
         enter(engine)
         engine.on_quote(quote("15:15", "100.5"), at("15:15"))
@@ -252,6 +253,41 @@ class EngineTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 changed.restore(snapshot)
 
+    def test_forward_paper_requires_history_before_the_existing_evidence_gate(self):
+        runner, broker, _ = build()
+        broker.book["mode"] = "paper_manual"
+        intent = EntryIntent(SYMBOL, 10, Decimal(98), Decimal(106), "test")
+        observed = quote("10:00", "100")
+        self.assertIn(
+            "Historical coverage is required",
+            runner.gate.entry_block(runner, intent, observed, at("10:00")),
+        )
+        runner.history_provider = lambda *_: {
+            "history_ready": False,
+            "symbol": SYMBOL,
+            "completed_sessions": 2,
+        }
+        self.assertIn(
+            "insufficient", runner.gate.entry_block(runner, intent, observed, at("10:00"))
+        )
+        runner.history_provider = lambda symbol, now, minimum: {
+            "history_ready": True,
+            "symbol": symbol,
+            "completed_sessions": 50,
+            "missing_declared_sessions": [],
+            "as_of": now.isoformat(),
+        }
+        self.assertIsNone(runner.gate.entry_block(runner, intent, observed, at("10:00")))
+        runner.history_provider = lambda *_: {
+            "history_ready": True,
+            "symbol": SYMBOL,
+            "completed_sessions": 50,
+            "as_of": at("10:05").isoformat(),
+        }
+        self.assertIn(
+            "insufficient", runner.gate.entry_block(runner, intent, observed, at("10:00"))
+        )
+
     def test_config_rejects_unsafe_values(self):
         with self.assertRaises(ValueError):
             build(max_orders_per_second=0)
@@ -267,6 +303,97 @@ class EngineTests(unittest.TestCase):
         self.assertLessEqual(loss + config.fee(Decimal(102), qty) * 2, 250)
         self.assertEqual(orb.size(Decimal("100"), Decimal("101"), config), 0)
         self.assertEqual(BAR, dt.timedelta(minutes=5))
+
+
+class RecoveryRegressionTests(unittest.TestCase):
+    def test_reconciliation_blocks_same_symbol_with_different_quantity(self):
+        runner, broker, _ = build()
+        enter(runner)
+        with patch.object(broker, "positions", return_value={SYMBOL: 5}):
+            self.assertFalse(runner.reconcile())
+            result = runner.on_quote(quote("10:05", "97"), at("10:05"))
+        self.assertEqual(result, [])
+        self.assertEqual(len(broker.book["events"]), 1)
+        self.assertEqual(runner.phase, Phase.HALTED)
+
+    def test_stale_snapshot_cannot_erase_an_external_journal_fill(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, broker, _ = build()
+            store = EngineStore(Path(temporary) / "run.sqlite")
+            store.create(broker.book)
+            other, changed, _ = build()
+            enter(other)
+            with sqlite3.connect(store.path) as conn:
+                conn.execute("UPDATE book SET data=? WHERE id=1", (json.dumps(changed.book),))
+            with self.assertRaisesRegex(ValueError, "stale engine save"):
+                store.save(runner)
+            self.assertEqual(len(EngineStore(store.path).load()[0]["events"]), 1)
+
+    def test_concurrent_engine_state_writer_is_detected_even_without_a_fill(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, broker, _ = build()
+            first = EngineStore(Path(temporary) / "run.sqlite")
+            first.create(broker.book)
+            second = EngineStore(first.path)
+            second.load()
+            first.save(runner)
+            with self.assertRaisesRegex(ValueError, "stale engine save"):
+                second.save(runner)
+
+    def orb_engine(self, **parameters):
+        return build(
+            OpeningRangeBreakout(Decimal(parameters.get("risk", 250)), Decimal(15000), Decimal(2))
+        )[0]
+
+    def opening_bars(self, runner):
+        for clock in ("09:20", "09:25", "09:30"):
+            runner.on_quote(quote(clock, "100", high="101", low="99"), at(clock))
+
+    def test_orb_restart_produces_the_same_entry_and_rejects_changed_parameters(self):
+        original = self.orb_engine()
+        self.opening_bars(original)
+        snapshot = json.loads(json.dumps(original.snapshot()))
+        restored = self.orb_engine()
+        restored.restore(snapshot)
+        breakout = quote("09:35", "102", high="103", low="100")
+        self.assertEqual(
+            original.on_quote(breakout, at("09:35")), restored.on_quote(breakout, at("09:35"))
+        )
+        with self.assertRaisesRegex(ValueError, "Strategy or session changed"):
+            self.orb_engine(risk=300).restore(snapshot)
+        changed_session = self.orb_engine()
+        changed_session.session = {**SESSION, "flat_by": at("15:10")}
+        with self.assertRaisesRegex(ValueError, "Strategy or session changed"):
+            changed_session.restore(snapshot)
+        with self.assertRaisesRegex(ValueError, "snapshot version"):
+            self.orb_engine().restore({**snapshot, "version": 1})
+
+    def test_missing_duplicate_or_off_grid_bars_never_create_an_entry(self):
+        for clocks in (
+            ("09:20",),
+            ("09:20", "09:20", "09:25", "09:30"),
+            ("09:21", "09:25", "09:30"),
+            ("09:25", "09:30"),
+        ):
+            with self.subTest(clocks=clocks):
+                runner = self.orb_engine()
+                for clock in clocks:
+                    runner.on_quote(quote(clock, "100", high="101", low="99"), at(clock))
+                self.assertEqual(
+                    runner.on_quote(quote("09:35", "102", high="103", low="100"), at("09:35")), []
+                )
+                self.assertEqual(runner.broker.positions(), {})
+                self.assertIn("DATA BLOCK", runner.strategy.last_reason[SYMBOL])
+
+    def test_invalid_data_state_remains_blocked_after_restart(self):
+        runner = self.orb_engine()
+        runner.on_quote(quote("09:25", "100", high="101", low="99"), at("09:25"))
+        restored = self.orb_engine()
+        restored.restore(json.loads(json.dumps(runner.snapshot())))
+        self.assertEqual(
+            restored.on_quote(quote("09:35", "102", high="103", low="100"), at("09:35")), []
+        )
+        self.assertIn(SYMBOL, restored.strategy.invalid)
 
 
 class EngineCliTests(unittest.TestCase):

@@ -114,6 +114,7 @@ class EngineConfig:
     heartbeat_timeout_seconds: int = 60
     max_spread_bps: Decimal = Decimal(20)
     max_orders_per_second: int = 10
+    minimum_history_sessions: int = 50
 
     def __post_init__(self) -> None:
         if not self.symbols:
@@ -125,6 +126,7 @@ class EngineConfig:
             self.max_quote_age_seconds,
             self.heartbeat_timeout_seconds,
             self.max_orders_per_second,
+            self.minimum_history_sessions,
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError("Engine timing and rate limits must be positive integers")
@@ -234,6 +236,20 @@ class RiskGate:
         """Return why an entry is refused, or None when the gate allows it."""
         if os.environ.get("INDIA_TRADE_LAB_HALT", "0") != "0":
             return "Global entry halt is active"
+        if getattr(engine.broker, "book", {}).get("mode") == "paper_manual":
+            if engine.history_provider is None:
+                return "Historical coverage is required before forward paper entries"
+            coverage = engine.history_provider(
+                intent.symbol, now, self.config.minimum_history_sessions
+            )
+            if (
+                coverage.get("history_ready") is not True
+                or coverage.get("symbol") != intent.symbol
+                or coverage.get("completed_sessions", 0) < self.config.minimum_history_sessions
+                or coverage.get("missing_declared_sessions")
+                or coverage.get("as_of") != now.isoformat()
+            ):
+                return "Historical coverage is insufficient for forward paper entries"
         if engine.halt_reason:
             return "Engine halted: " + engine.halt_reason
         if not engine.session["open"] <= now < engine.session["entry_cutoff"]:
@@ -263,6 +279,7 @@ class Engine:
         broker: Broker,
         strategy: Strategy,
         notifier: Notifier = stderr_notifier,
+        history_provider: Callable[[str, dt.datetime, int], dict] | None = None,
     ) -> None:
         if not session["open"] < session["entry_cutoff"] < session["flat_by"] < session["close"]:
             raise ValueError("Invalid session boundaries")
@@ -271,6 +288,7 @@ class Engine:
         self.broker = broker
         self.strategy = strategy
         self.notify = notifier
+        self.history_provider = history_provider
         self.gate = RiskGate(config)
         self.trades: dict[str, dict[str, str]] = {}
         self.entries: dict[str, int] = {}
@@ -317,10 +335,23 @@ class Engine:
             self.halt_reason = reason
             self._record("halt", alert=True, reason=reason, open_symbols=sorted(self.trades))
 
+    def run_digest(self) -> str:
+        """Bind recovery to the session boundaries and strategy parameters as well as costs."""
+        parameters = getattr(self.strategy, "configuration", lambda: {})()
+        payload = {
+            "engine": self.config.digest(),
+            "session": {key: value.isoformat() for key, value in self.session.items()},
+            "strategy": type(self.strategy).__qualname__,
+            "parameters": parameters,
+        }
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
     def snapshot(self) -> dict[str, Any]:
         """Serializable engine state for crash recovery alongside the journal."""
         return {
-            "version": 1,
+            "version": 2,
+            "run_sha256": self.run_digest(),
+            "strategy_state": getattr(self.strategy, "snapshot", lambda: None)(),
             "config_sha256": self.config.digest(),
             "session_date": self.session["open"].date().isoformat(),
             "trades": self.trades,
@@ -332,12 +363,20 @@ class Engine:
 
     def restore(self, snapshot: dict[str, Any]) -> None:
         """Resume after a restart, then reconcile against the broker before trading."""
-        if snapshot.get("version") != 1:
+        if snapshot.get("version") != 2:
             raise ValueError("Unsupported engine snapshot version")
         if snapshot.get("config_sha256") != self.config.digest():
             raise ValueError("Engine config changed mid-session; start a separate run")
         if snapshot.get("session_date") != self.session["open"].date().isoformat():
             raise ValueError("Snapshot belongs to a different session")
+        if snapshot.get("run_sha256") != self.run_digest():
+            raise ValueError("Strategy or session changed; start a separate run")
+        strategy_state = snapshot.get("strategy_state")
+        if strategy_state is not None:
+            restore = getattr(self.strategy, "restore", None)
+            if restore is None:
+                raise ValueError("Strategy cannot restore its persisted state")
+            restore(strategy_state)
         self.trades = dict(snapshot["trades"])
         self.entries = dict(snapshot["entries"])
         self.halt_reason = snapshot["halt_reason"]
@@ -370,13 +409,13 @@ class Engine:
     def reconcile(self) -> bool:
         """Compare engine-managed positions with the broker. A mismatch halts entries."""
         held = self.broker.positions()
-        managed = set(self.trades)
-        if set(held) != managed:
+        managed = {symbol: int(trade["qty"]) for symbol, trade in self.trades.items()}
+        if held != managed:
             self._record(
                 "reconcile_mismatch",
                 alert=True,
-                broker=sorted(held),
-                engine=sorted(managed),
+                broker=held,
+                engine=managed,
             )
             self.halt("Broker and engine positions disagree")
             return False
@@ -390,6 +429,14 @@ class Engine:
             self._record("quote_rejected", symbol=quote.symbol, reason=problem)
             return []
         self.last_quote_at = now
+        self._record(
+            "quote",
+            symbol=quote.symbol,
+            bid=str(quote.bid),
+            ask=str(quote.ask),
+            source=quote.source,
+            as_of=quote.as_of.isoformat(),
+        )
         results = []
         if quote.symbol in self.trades:
             exit_result = self._maybe_exit(quote, now)
@@ -458,7 +505,10 @@ class Engine:
             price, reason = quote.bid, "square_off"
         else:
             return None
-        qty = self.broker.positions().get(quote.symbol, 0)
+        if not self.reconcile():
+            return None
+        qty = int(trade["qty"])
+        self._record("decision", symbol=quote.symbol, side="sell", qty=qty, reason=reason)
         order = Order(
             client_order_id=trade["entry_id"] + ":X",
             symbol=quote.symbol,
@@ -485,11 +535,32 @@ class Engine:
         }
         intent = self.strategy.on_quote(quote, context)
         if intent is None:
+            reasons = getattr(self.strategy, "last_reason", {})
+            reason = reasons.get(quote.symbol, "No entry proposed by the strategy")
+            self._record(
+                "strategy_blocked" if reason.startswith("DATA BLOCK") else "strategy_wait",
+                symbol=quote.symbol,
+                reason=reason,
+            )
             return None
+        self._record(
+            "decision",
+            symbol=intent.symbol,
+            side="buy",
+            qty=intent.qty,
+            stop=str(intent.stop),
+            target=str(intent.target),
+            reason=intent.reason,
+        )
         blocked = self.gate.entry_block(self, intent, quote, now)
         if blocked:
             self._record("entry_blocked", symbol=intent.symbol, reason=blocked)
             return None
+        self._record(
+            "risk_passed",
+            symbol=intent.symbol,
+            reason="Engine gate passed; journal caps are checked at virtual fill",
+        )
         number = self.entries.get(intent.symbol, 0) + 1
         entry_id = f"{now.date().isoformat()}:{intent.symbol}:E{number}"
         order = Order(
@@ -509,6 +580,7 @@ class Engine:
         if result.status in ("filled", "duplicate"):
             self.trades[intent.symbol] = {
                 "entry_id": entry_id,
+                "qty": str(intent.qty),
                 "stop": str(intent.stop),
                 "target": str(intent.target),
             }
@@ -538,9 +610,19 @@ class EngineStore:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.saved = 0
+        self.version: str | None = None
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(str(self.path), isolation_level=None, timeout=10)
+
+    @staticmethod
+    def _version(conn: sqlite3.Connection) -> str:
+        payload = [
+            conn.execute("SELECT data FROM book WHERE id=1").fetchone(),
+            conn.execute("SELECT data FROM engine_state WHERE id=1").fetchone(),
+            conn.execute("SELECT MAX(seq) FROM engine_log").fetchone(),
+        ]
+        return hashlib.sha256(json.dumps(payload).encode()).hexdigest()
 
     def create(self, book: dict[str, Any]) -> None:
         if self.path.exists():
@@ -556,6 +638,7 @@ class EngineStore:
             )
             conn.execute("CREATE TABLE engine_log (seq INTEGER PRIMARY KEY, data TEXT NOT NULL)")
             conn.execute("INSERT INTO book VALUES (1, ?)", (json.dumps(book),))
+            self.version = self._version(conn)
             conn.commit()
 
     def save(self, engine: Engine) -> None:
@@ -566,6 +649,8 @@ class EngineStore:
         new = engine.log[self.saved :]
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if self.version is None or self._version(conn) != self.version:
+                raise ValueError("Journal changed since load; refusing stale engine save")
             conn.execute("INSERT OR REPLACE INTO book VALUES (1, ?)", (json.dumps(book),))
             conn.execute(
                 "INSERT OR REPLACE INTO engine_state VALUES (1, ?)",
@@ -575,13 +660,18 @@ class EngineStore:
                 "INSERT INTO engine_log (data) VALUES (?)",
                 [(json.dumps(e, default=str),) for e in new],
             )
+            version = self._version(conn)
             conn.commit()
+        self.version = version
         self.saved = len(engine.log)
 
     def load(self) -> tuple[dict[str, Any], dict[str, Any] | None]:
         with self._connect() as conn:
+            conn.execute("BEGIN")
             book = json.loads(conn.execute("SELECT data FROM book WHERE id=1").fetchone()[0])
             row = conn.execute("SELECT data FROM engine_state WHERE id=1").fetchone()
+            self.version = self._version(conn)
+            conn.commit()
         paper_book.verify_state(book)
         return book, (json.loads(row[0]) if row else None)
 
@@ -598,11 +688,47 @@ class OpeningRangeBreakout:
         self.cap = position_cap_inr
         self.target_r = target_r
         self.ranges: dict[str, list[Decimal]] = {}
+        self.last_bar: dict[str, dt.datetime] = {}
+        self.bar_count: dict[str, int] = {}
+        self.invalid: set[str] = set()
+        self.last_reason: dict[str, str] = {}
+
+    def configuration(self) -> dict[str, str]:
+        return {
+            "version": "2",
+            "risk_inr": str(self.risk),
+            "position_cap_inr": str(self.cap),
+            "target_r": str(self.target_r),
+        }
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "ranges": {s: [str(v) for v in values] for s, values in self.ranges.items()},
+            "last_bar": {s: value.isoformat() for s, value in self.last_bar.items()},
+            "bar_count": self.bar_count.copy(),
+            "invalid": sorted(self.invalid),
+            "last_reason": self.last_reason.copy(),
+        }
+
+    def restore(self, state: dict[str, Any]) -> None:
+        self.ranges = {s: [Decimal(v) for v in values] for s, values in state["ranges"].items()}
+        self.last_bar = {s: dt.datetime.fromisoformat(v) for s, v in state["last_bar"].items()}
+        self.bar_count = dict(state["bar_count"])
+        self.invalid = set(state["invalid"])
+        self.last_reason = dict(state["last_reason"])
 
     def on_quote(self, quote: Quote, context: dict[str, Any]) -> EntryIntent | None:
         session, config = context["session"], context["config"]
-        if quote.high is None or quote.low is None:
+        symbol = quote.symbol
+        expected = self.last_bar.get(symbol, session["open"]) + BAR
+        if quote.high is None or quote.low is None or quote.as_of != expected:
+            self.invalid.add(symbol)
+        self.last_bar[symbol] = quote.as_of
+        if symbol in self.invalid:
+            self.last_reason[symbol] = "DATA BLOCK: missing, duplicate or unordered completed bars"
             return None
+        self.bar_count[symbol] = self.bar_count.get(symbol, 0) + 1
+        self.last_reason[symbol] = "Building the complete three-bar opening range"
         if quote.as_of <= session["open"] + 3 * BAR:
             bounds = self.ranges.setdefault(quote.symbol, [quote.high, quote.low])
             bounds[0], bounds[1] = max(bounds[0], quote.high), min(bounds[1], quote.low)
@@ -610,7 +736,8 @@ class OpeningRangeBreakout:
         if context["entries_today"].get(quote.symbol) or quote.symbol not in self.ranges:
             return None
         high, low = self.ranges[quote.symbol]
-        if quote.bid <= high:
+        self.last_reason[symbol] = "Waiting for a completed close above the opening range"
+        if self.bar_count[symbol] < 4 or quote.bid <= high:
             return None
         qty = self.size(quote.ask, low, config)
         if qty <= 0:

@@ -15,6 +15,9 @@ or use the Python CLI below.
 - Point-in-time fundamental screening with source/publication dates and rejection of missing, stale or future information.
 - A local virtual-INR journal with cash, position and planned-risk limits; daily entry/open-position caps; loss-streak/drawdown stops; pause; stale-quote and duplicate-event rejection.
 - A deterministic paper session engine with a risk gate, automatic stop/target/square-off exits, stale-feed halt, reconciliation and restart recovery. See [engine reference](skills/day-trader-india/references/engine.md).
+- A local browser dashboard with a 3D decision funnel, mascot, recorded calls, replay controls and persistent history coverage.
+- Dated research shortlists from a sourced active-EQ universe, complete history and prior traded-value checks; current setups still need confirmation.
+- Fifty-session historical coverage checks for forward engine entries; synthetic history never satisfies that gate.
 - Fourteen portable skills, optional native Claude/Codex specialist profiles, synthetic examples and offline regression tests.
 
 The supplied opening-range rule is a test harness, not a proven trading strategy. A passing test verifies software behaviour, not investment performance.
@@ -41,6 +44,27 @@ source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
 python scripts/check.py
 ```
+
+### Open the paper observatory
+
+From the repository root, run:
+
+```bash
+python3 scripts/observatory.py
+```
+
+Open `http://127.0.0.1:8765`. Choose **Run paper replay** to watch the engine
+process the bundled synthetic session. Select a funnel stage or call to inspect
+its recorded inputs, result and explanation. The UI polls the local API every
+second. Pause controls replay time; a sticky entry halt still permits paper exits.
+
+The dashboard has no exchange connection or live-order controls. Its five active
+stages are deterministic Python rules. Research skills that were not invoked are
+shown as idle. An exported hosted preview displays archived synthetic events;
+run the local backend for working replay controls.
+
+Books and event logs live under `data/observatory/` and are retained between runs.
+Historical coverage and import instructions are in [the observatory guide](docs/observatory.md).
 
 ### Run the made-up example
 
