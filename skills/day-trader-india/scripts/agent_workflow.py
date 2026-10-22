@@ -15,6 +15,18 @@ from typing import Any
 from guardrails import evidence_time
 
 WORKFLOWS = {
+    "intraday_debate": {
+        "india-data": [],
+        "india-news": [],
+        "india-analyst": ["india-data"],
+        "india-sentiment": ["india-news"],
+        "india-screener": ["india-data"],
+        "india-bull": ["india-analyst", "india-sentiment", "india-screener", "india-news"],
+        "india-bear": ["india-analyst", "india-sentiment", "india-screener", "india-news"],
+        "india-budget": ["india-bull", "india-bear"],
+        "india-risk": ["india-budget", "india-data", "india-news", "india-bull", "india-bear"],
+        "india-reviewer": ["india-risk", "india-bull", "india-bear"],
+    },
     "intraday": {
         "india-data": [],
         "india-news": [],

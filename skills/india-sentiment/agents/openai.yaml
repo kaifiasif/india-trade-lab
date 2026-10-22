@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Sentiment Analyst"
+  short_description: "Review dated Indian news and sentiment evidence"
+  default_prompt: "Use $india-sentiment to review the supplied Indian cash-equity evidence and return a read-only handoff."

@@ -1,7 +1,7 @@
 # Install the skills
 
-This repository contains fourteen portable Agent Skills: a coordinator/runtime,
-twelve specialist roles and a developer skill. Start with the coordinator;
+This repository contains seventeen portable Agent Skills: a coordinator/runtime,
+fifteen specialist roles and a developer skill. Start with the coordinator;
 see the [complete role map](../skills/day-trader-india/references/agent-workflow.md).
 
 | Skill | Purpose | Source |
@@ -35,7 +35,7 @@ Install the complete skill pack and native specialist agents for your local proj
 python3 scripts/install_skills.py --platform claude --scope user --with-agents
 ```
 
-This creates fourteen skill folders under `~/.claude/skills/` and twelve
+This creates seventeen skill folders under `~/.claude/skills/` and fifteen
 restricted agent profiles under `~/.claude/agents/`. Omit `--with-agents` to
 install only skills. Open Claude Code's skill selector or start
 a new session, then use:
@@ -56,7 +56,7 @@ the [official Claude Code skill documentation](https://code.claude.com/docs/en/s
 python3 scripts/install_skills.py --platform codex --scope user --with-agents
 ```
 
-This creates fourteen skill folders under `~/.agents/skills/` and twelve
+This creates seventeen skill folders under `~/.agents/skills/` and fifteen
 native profiles under `~/.codex/agents/`. For a repository install,
 use `--scope project --project /path/to/project`, which targets `.agents/skills/` and `.codex/agents/`.
 Reopen the skill selector or session and ask:
@@ -112,7 +112,7 @@ Instead of copying folders, add this repository's marketplace:
 /plugin install india-trade-lab@india-trade-lab
 ```
 
-The plugin manifest includes all skills and the twelve Claude agent profiles.
+The plugin manifest includes all skills and the fifteen Claude agent profiles.
 Plugin skills use names such as `/india-trade-lab:day-trader-india`. Choose one
 installation method to avoid duplicate skills. The manifest/path checks run
 offline; native plugin loading has not been exercised in this environment.
@@ -126,7 +126,7 @@ python3 scripts/package_skills.py
 ```
 
 The output is `dist/day-trader-india.zip`, `dist/india-trade-dev.zip` and a
-SHA-256 checksum manifest, plus one ZIP for each of the twelve specialist skills. Each archive contains a single named skill folder
+SHA-256 checksum manifest, plus one ZIP for each of the fifteen specialist skills. Each archive contains a single named skill folder
 with `SKILL.md` and all its resources.
 
 Enable **Code execution and file creation**, then open **Customize > Skills**.
@@ -186,7 +186,7 @@ The installer prints the exact paths and refuses to overwrite existing skills.
 To update, run `git pull`, back up the named installed folders outside the
 client's discovery directory, remove those old installed folders and rerun the
 installer. Rebuild and re-upload ZIPs for Claude web. To uninstall, remove only
-only this pack's named skill folders and, if installed, its twelve native
+only this pack's named skill folders and, if installed, its fifteen native
 profile files, or disable/remove uploaded skills in the host UI.
 Never delete a parent skill directory containing other skills.
 

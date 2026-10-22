@@ -17,6 +17,9 @@ from typing import Any
 import agent_runtime
 import agent_workflow
 import guardrails
+import model_providers
+import paper_analytics
+import research_lab
 from history import HistoryStore
 from watchlist import build_watchlist
 
@@ -24,7 +27,22 @@ import engine
 import india_research
 import paper_book
 
+OPTIONAL_CONFIG = {
+    "review_workflow": "intraday",
+    "quick_model": "",
+    "deep_model": "",
+    "model_routes": {},
+    "model_timeout_seconds": 20,
+    "max_output_tokens": 1200,
+    "reasoning_effort": None,
+    "screening_mode": "liquidity",
+    "daily_bars": "daily-bars.csv",
+    "benchmark_symbol": "NSE:NIFTY50",
+    "benchmark_observations": "benchmark-quotes.json",
+}
+
 DEFAULT_CONFIG = {
+    **OPTIONAL_CONFIG,
     "version": 1,
     "mode": "paper_research",
     "daily_profit_goal_inr": "80000.00",
@@ -110,6 +128,32 @@ class DecisionStore:
                 "CREATE TABLE IF NOT EXISTS lease (id INTEGER PRIMARY KEY CHECK(id=1), "
                 "owner TEXT, until REAL)"
             )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS handoffs (run_id TEXT, role TEXT, data TEXT, PRIMARY KEY(run_id,role))"
+            )
+
+    def save_handoff(self, run_id: str, report: dict) -> None:
+        with sqlite3.connect(self.path) as conn:
+            existing = conn.execute(
+                "SELECT data FROM handoffs WHERE run_id=? AND role=?",
+                (run_id + ":" + report["symbol"], report["role"]),
+            ).fetchone()
+            if existing and json.loads(existing[0]) != report:
+                raise ValueError("Checkpoint conflicts with the persisted handoff")
+            conn.execute(
+                "INSERT OR IGNORE INTO handoffs VALUES (?,?,?)",
+                (run_id + ":" + report["symbol"], report["role"], json.dumps(report)),
+            )
+
+    def handoffs(self, run_id: str, symbol: str) -> list[dict]:
+        with sqlite3.connect(self.path) as conn:
+            return [
+                json.loads(row[0])
+                for row in conn.execute(
+                    "SELECT data FROM handoffs WHERE run_id=? ORDER BY rowid",
+                    (run_id + ":" + symbol,),
+                )
+            ]
 
     def acquire(self, owner: str) -> bool:
         now = dt.datetime.now(dt.timezone.utc).timestamp()
@@ -160,7 +204,7 @@ class DailyCoordinator:
         self, config_path: Path, reviewer: agent_runtime.ResearchReviewer | None = None, now=None
     ) -> None:
         self.config_path = config_path.resolve()
-        self.config = read_json(config_path)
+        self.config = {**OPTIONAL_CONFIG, **read_json(config_path)}
         cfg = self.config
         if cfg.get("version") != 1 or cfg.get("mode") != "paper_research":
             raise ValueError("Only version-1 paper_research configuration is supported")
@@ -183,14 +227,14 @@ class DailyCoordinator:
         self.now = now or (lambda: dt.datetime.now(engine.IST))
         self.store = DecisionStore(self.path("decision_db"))
         self.owner = uuid.uuid4().hex
+        if cfg["review_workflow"] not in ("intraday", "intraday_debate") or cfg[
+            "screening_mode"
+        ] not in ("liquidity", "relative_strength"):
+            raise ValueError("Unsupported research workflow or screening mode")
         if reviewer is not None:
             self.reviewer = reviewer
-        elif cfg["model_provider"] == "openai":
-            self.reviewer = agent_runtime.OpenAIReviewer(cfg["model"])
-        elif cfg["model_provider"] == "disabled":
-            self.reviewer = agent_runtime.OfflineReviewer()
         else:
-            raise ValueError("Model provider must be disabled or openai")
+            self.reviewer = model_providers.configured_reviewer(cfg)
 
     def path(self, name: str) -> Path:
         value = self.config[name]
@@ -216,6 +260,8 @@ class DailyCoordinator:
                 "quotes",
                 "pretrade_evidence",
                 "research_evidence",
+                "daily_bars",
+                "benchmark_observations",
             )
             if self.path(name).is_file()
         }
@@ -231,7 +277,7 @@ class DailyCoordinator:
         }
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
-    def run_once(self, allow_entries: bool = True) -> dict:
+    def run_once(self, allow_entries: bool = True, resume: bool = False) -> dict:
         """A run is idempotent for unchanged evidence. No missing input is assumed clear."""
         if not self.store.acquire(self.owner):
             raise ValueError("Another coordinator owns the research lease")
@@ -244,27 +290,35 @@ class DailyCoordinator:
             fingerprint = self._fingerprint(allow_entries)
             with sqlite3.connect(self.store.path) as conn:
                 row = conn.execute(
-                    "SELECT report FROM runs WHERE fingerprint=?", (fingerprint,)
+                    "SELECT id,started_at,report FROM runs WHERE fingerprint=?", (fingerprint,)
                 ).fetchone()
                 if row:
-                    if row[0] is None:
+                    if row[2] is None and not resume:
                         raise ValueError(
                             "An interrupted run exists for these inputs; refresh evidence"
                         )
-                    archived = json.loads(row[0])
-                    archived["cached"] = True
-                    archived["status"] = "ARCHIVED_RESULT"
-                    for call in archived["calls"]:
-                        call["original_decision"] = call["decision"]
-                        call["decision"] = "DATA_BLOCK"
-                        call["reasons"] = [
-                            "Unchanged archived evidence; refresh before a current call"
-                        ]
-                    return archived
-                conn.execute(
-                    "INSERT INTO runs VALUES (?,?,?,?,?)",
-                    (run_id, fingerprint, started.isoformat(), None, None),
-                )
+                    if row[2] is None:
+                        run_id, started = row[0], paper_book.timestamp(row[1])
+                        if (self.now() - started).total_seconds() > 120:
+                            raise ValueError("Interrupted research is stale; refresh observations")
+                    else:
+                        archived = json.loads(row[2])
+                        archived["cached"] = True
+                        archived["status"] = "ARCHIVED_RESULT"
+                        for call in archived["calls"]:
+                            call["original_decision"] = call["decision"]
+                            call["decision"] = "DATA_BLOCK"
+                            call["reasons"] = [
+                                "Unchanged archived evidence; refresh before a current call"
+                            ]
+                        return archived
+                else:
+                    conn.execute(
+                        "INSERT INTO runs VALUES (?,?,?,?,?)",
+                        (run_id, fingerprint, started.isoformat(), None, None),
+                    )
+            self.review_cutoff = started
+            self.screen_context = {}
             report = {
                 "run_id": run_id,
                 "as_of": started.isoformat(),
@@ -298,7 +352,17 @@ class DailyCoordinator:
                         top=self.config["max_candidates"],
                         min_turnover_inr=self.config["min_turnover_inr"],
                     )
+                    if self.config["screening_mode"] == "relative_strength":
+                        shortlist = research_lab.screen(
+                            research_lab.load_daily(self.path("daily_bars"), started),
+                            read_json(self.path("universe")),
+                            self.config["benchmark_symbol"],
+                            started,
+                            self.config["max_candidates"],
+                            min_turnover=self.config["min_turnover_inr"],
+                        )
                     report["shortlist"] = shortlist
+                    self.screen_context = {item["symbol"]: item for item in shortlist["candidates"]}
                     bars = india_research.bars_from_csv(self.path("bars"))
                     pretrade = read_json(self.path("pretrade_evidence"))
                     evidence = read_json(self.path("research_evidence"))
@@ -321,6 +385,20 @@ class DailyCoordinator:
                     report["blockers"].append(
                         "Entry research inputs are incomplete; existing exit reviews retained"
                     )
+                # One selected entry per snapshot: candidates do not reserve cash independently.
+                selected = False
+                for call in report["calls"]:
+                    if call["decision"] == "BUY_PAPER_PROPOSAL":
+                        if selected:
+                            call.update(
+                                decision="WAIT_ALLOCATION",
+                                reasons=[
+                                    "Another ranked entry was selected for this portfolio snapshot"
+                                ],
+                            )
+                        else:
+                            selected = True
+                            call["selected"] = True
                 decisions = {call["decision"] for call in report["calls"]}
                 report["status"] = (
                     "RESEARCH_PROPOSALS"
@@ -337,6 +415,28 @@ class DailyCoordinator:
                     "quotes or evidence is missing or invalid"
                 )
             report["goal"] = goal_report(book, self.config["daily_profit_goal_inr"], started)
+            report["workflow"] = self.config["review_workflow"]
+            report["required_roles"] = list(
+                agent_workflow.WORKFLOWS[self.config["review_workflow"]]
+            )
+            if book:
+                try:
+                    benchmark = (
+                        read_json(self.path("benchmark_observations"))
+                        if self.path("benchmark_observations").is_file()
+                        else None
+                    )
+                    report["performance"] = paper_analytics.performance(
+                        book,
+                        read_json(self.path("quotes")),
+                        self.now(),
+                        benchmark,
+                        fee_bps=self.config["fee_bps"],
+                        fee_flat=self.config["fee_flat_inr"],
+                        slippage_bps=self.config["slippage_bps"],
+                    )
+                except (ValueError, KeyError, TypeError, OSError, sqlite3.Error):
+                    report["performance"] = {"status": "DATA_REQUIRED"}
             report["completed_at"] = self.now().isoformat()
             self.store.event(
                 run_id,
@@ -409,6 +509,8 @@ class DailyCoordinator:
                 reason = (
                     "stop"
                     if quote.bid <= Decimal(held["stop_inr"])
+                    else "target"
+                    if held.get("target_inr") and quote.bid >= Decimal(held["target_inr"])
                     else "square_off"
                     if now >= session["flat_by"]
                     else None
@@ -487,6 +589,11 @@ class DailyCoordinator:
                 "exit_fee_reserve_inr": str(settings.fee(stop, qty)),
                 "slippage_bps": str(settings.slippage_bps),
                 "book_state_sha256": book["state_sha256"],
+                "pretrade_sha256": agent_workflow.proposal_digest(pretrade[symbol]),
+                "quote_bid_inr": str(quote.bid),
+                "strategy_version": "intraday-orb-v1",
+                "patterns": ["OPENING_RANGE_BREAKOUT"]
+                + self.screen_context.get(symbol, {}).get("features", {}).get("patterns", []),
             }
             # Validate the exact proposed transition on a pure copy; never persist a fill here.
             paper_book.fill(
@@ -504,6 +611,7 @@ class DailyCoordinator:
                 settings.fee(stop, qty),
                 now=now,
                 evidence=pretrade[symbol],
+                target=target,
             )
             supplied = evidence[symbol]
             if not isinstance(supplied, list) or not supplied or len(supplied) > 50:
@@ -531,11 +639,14 @@ class DailyCoordinator:
             context = {
                 "run_id": run_id,
                 "symbol": symbol,
-                "as_of": now.isoformat(),
+                "as_of": self.review_cutoff.isoformat(),
+                "workflow": self.config["review_workflow"],
                 "proposal": proposal,
                 "proposal_sha256": agent_workflow.proposal_digest(proposal),
                 "history": coverage,
+                "daily_screen": self.screen_context.get(symbol),
                 "evidence": supplied,
+                "resolved_paper_outcomes": paper_analytics.closed_outcomes(book, now)[-20:],
                 "book": {
                     key: book[key]
                     for key in (
@@ -548,9 +659,11 @@ class DailyCoordinator:
                     )
                 },
             }
-            if self.reviewer.name == agent_runtime.OpenAIReviewer.name:
+            if getattr(self.reviewer, "uses_network", False):
                 if not self.store.reserve_model_calls(
-                    str(now.date()), 6, self.config["max_model_calls_per_day"]
+                    str(now.date()),
+                    len(agent_workflow.WORKFLOWS[self.config["review_workflow"]]),
+                    self.config["max_model_calls_per_day"],
                 ):
                     raise ValueError(
                         "Daily model-call budget exhausted; no automatic retry or limit increase"
@@ -560,6 +673,8 @@ class DailyCoordinator:
                 self.reviewer,
                 emit=lambda event: self.store.event(run_id, event),
                 now=self.now,
+                resume_reports=self.store.handoffs(run_id, symbol),
+                checkpoint=lambda handoff: self.store.save_handoff(run_id, handoff),
             )
             result.update(proposal=proposal, agent_review=reviewed)
             if reviewed["review"]["status"] != "REVIEW_COMPLETE":
@@ -590,6 +705,11 @@ def main() -> int:
     for name in ("run", "watch"):
         child = sub.add_parser(name)
         child.add_argument("--config", type=Path, default=Path("data/observatory/pipeline.json"))
+        child.add_argument(
+            "--resume",
+            action="store_true",
+            help="Resume only unchanged, still-fresh interrupted reviews",
+        )
     args = parser.parse_args()
     try:
         if args.command == "init":
@@ -602,7 +722,7 @@ def main() -> int:
             return 0
         coordinator = DailyCoordinator(args.config)
         while True:
-            print(json.dumps(coordinator.run_once(), indent=2), flush=True)
+            print(json.dumps(coordinator.run_once(resume=args.resume), indent=2), flush=True)
             if args.command != "watch":
                 break
             threading.Event().wait(coordinator.config["poll_seconds"])

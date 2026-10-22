@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Bear Researcher"
+  short_description: "Challenge Indian paper proposals with evidence"
+  default_prompt: "Use $india-bear to review the supplied Indian cash-equity evidence and return a read-only handoff."

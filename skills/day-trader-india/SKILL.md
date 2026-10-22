@@ -50,7 +50,7 @@ coordinator runs tools and records only explicitly requested virtual fills.
 | Virtual cash and risk | Local manual journal; cash/position/planned-risk limits, daily entry/open-position caps, loss-streak/drawdown stops, pause, quote freshness and duplicate IDs. |
 | Portfolio/news/disclosures | Guided evidence review; no automatic rebalancing, tax engine, news ingestion or disclosure copying. |
 | Current prices/continuous paper execution | Mapped read-only quote polling is available when configured. No continuous paper-fill execution; journal stops/targets do not execute automatically. |
-| Scheduled research | Explicitly started worker, mapped Kite/Paytm quotes and Kite/Upstox bars, six model-role handoffs, final paper proposals and audit log; requires private configuration and refreshed evidence. |
+| Scheduled research | Explicitly started worker, mapped Kite/Paytm quotes and Kite/Upstox bars, six or ten model-role handoffs, final paper proposals and audit log; requires private configuration and refreshed evidence. |
 | US/crypto | India/US dated session router with DST; Binance read-only spot observations. US decisions and crypto paper execution are not implemented. |
 | Real-money orders | No implementation, connector or authorization in this skill. |
 
@@ -60,6 +60,12 @@ Read [daily-service.md](references/daily-service.md) for continuous research,
 Paytm quote limitations, OpenAI role reviews, crypto observations, session
 routing and deployment. The ₹80,000 daily goal is reporting only and never
 changes risk, sizing or frequency. No minimum return can be guaranteed.
+
+Read [research-lab.md](references/research-lab.md) for Nifty-relative ranking,
+daily technical labels, the optional bull/bear/sentiment workflow, provider
+routing, checkpoint recovery and paper-performance reports. Require at least
+61 aligned completed daily observations for 60-session returns; retain the
+separate 50-session intraday gate. Pattern statistics never relax a veto.
 
 Read [risk-process.md](references/risk-process.md) before planning any trade.
 Read [guardrails.md](references/guardrails.md) for exact version-3 forward

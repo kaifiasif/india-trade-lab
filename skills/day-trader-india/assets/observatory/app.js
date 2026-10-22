@@ -433,14 +433,16 @@ function renderResearch() {
     if (report?.goal)
         $("research-goal").textContent =
             `Daily goal ${money(report.goal.daily_target_inr)} · recorded today ${money(report.goal.realized_today_inr)} · goal never changes risk or quantity.`;
-    const roles = [
-        "india-data",
-        "india-news",
-        "india-screener",
-        "india-budget",
-        "india-risk",
-        "india-reviewer",
-    ];
+    const roles = Array.isArray(report?.required_roles)
+        ? report.required_roles
+        : [
+              "india-data",
+              "india-news",
+              "india-screener",
+              "india-budget",
+              "india-risk",
+              "india-reviewer",
+          ];
     const events = research.events || [];
     $("research-content").innerHTML = report
         ? `<div class="research-flow">${roles
@@ -457,7 +459,7 @@ function renderResearch() {
                   )
                   .join("") ||
               `<p class="empty">${esc(report.blockers?.join(" · ") || "No current proposals")}</p>`
-          }</div><p class="section-note">${esc(report.as_of || "Review in progress")} · ${esc(report.provider || "provider not recorded")} · no fills or real orders sent</p>`
+          }</div>${report.performance?.summary ? `<button class="research-call" data-paper-performance><strong>Paper performance</strong><span>Realized ${esc(money(report.performance.realized_inr))}</span><small>${esc(report.performance.summary.closed_trades)} closed trades · ${esc(report.performance.missing_marks.length ? "Open marks missing" : "Liquidation marks available")} · inspect costs, patterns and benchmark</small></button>` : ""}<p class="section-note">${esc(report.as_of || "Review in progress")} · ${esc(report.provider || "provider not recorded")} · no fills or real orders sent</p>`
         : '<p class="empty">Start the local research service with a forward paper book, sourced feeds and a configured model. No agent reviews have been invented.</p>';
     $("research-content")
         .querySelectorAll("[data-role]")
@@ -484,6 +486,11 @@ function renderResearch() {
                     report.calls[Number(button.dataset.researchCall)],
                 ),
             ),
+        );
+    $("research-content")
+        .querySelector("[data-paper-performance]")
+        ?.addEventListener("click", () =>
+            showDetails("Recorded paper performance", report.performance),
         );
     const service = research.service;
     $("market-sessions").innerHTML = service

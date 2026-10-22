@@ -22,6 +22,9 @@ ROLE_SKILLS = (
     "india-cost-tax",
     "india-rebalance",
     "india-reviewer",
+    "india-bull",
+    "india-bear",
+    "india-sentiment",
 )
 SKILLS = ("day-trader-india", "india-trade-dev", *ROLE_SKILLS)
 AGENT_PLATFORMS = {

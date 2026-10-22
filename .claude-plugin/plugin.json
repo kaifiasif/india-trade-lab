@@ -1,7 +1,7 @@
 {
   "name": "india-trade-lab",
-  "version": "0.2.0",
-  "description": "Indian cash-equity research and paper trading: coordinator, twelve specialists and developer standards. No live orders.",
+  "version": "0.3.0",
+  "description": "Indian cash-equity research and paper trading: coordinator, fifteen specialists and developer standards. No live orders.",
   "author": {
     "name": "Kaifi Asif"
   },
@@ -21,6 +21,9 @@
     "./agent_profiles/claude/india-alerts.md",
     "./agent_profiles/claude/india-cost-tax.md",
     "./agent_profiles/claude/india-rebalance.md",
-    "./agent_profiles/claude/india-reviewer.md"
+    "./agent_profiles/claude/india-reviewer.md",
+    "./agent_profiles/claude/india-bull.md",
+    "./agent_profiles/claude/india-bear.md",
+    "./agent_profiles/claude/india-sentiment.md"
   ]
 }

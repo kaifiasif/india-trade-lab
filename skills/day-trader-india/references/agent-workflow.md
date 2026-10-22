@@ -9,7 +9,7 @@ to these installed role skills, or run their procedures sequentially if the
 host cannot launch subagents. Do not claim independent agents ran in that case.
 
 The optional [daily service](daily-service.md) executes the intraday dependency
-graph with six separately prompted, evidence-bound model calls. Its default
+graph with six (or ten in `intraday_debate`) separately prompted, evidence-bound model calls. Its default
 provider is disabled. Native host delegation and this Python runtime are
 different invocation paths; both use the same role instructions and handoff
 contract. Only persisted, valid provider responses count as model reviews.
@@ -27,6 +27,9 @@ contract. Only persisted, valid provider responses count as model reviews.
 | `india-alerts` | On-demand price/level observations | Guided snapshot review; no background watcher |
 | `india-cost-tax` | Estimated charges and dated Indian tax context | Guided review; no statutory calculator or tax filing |
 | `india-rebalance` | Drift and proposed portfolio changes | Guided proposals; no automatic rebalance |
+| `india-bull` | Positive thesis, invalidation and opposing facts | Evidence-bound review; no mandatory buy |
+| `india-bear` | Downside challenge and disconfirming facts | Evidence-bound review; no short sale |
+| `india-sentiment` | Attributed sentiment, verified facts and sample limits | Supplied evidence only; no social scraper |
 | `india-reviewer` | Independent challenge of evidence and proposal | Final veto; cannot authorize real orders |
 
 The reference project `Jakeschincariol/trader-skill` packages eleven cooperating
@@ -36,7 +39,7 @@ it does not reuse US tax, SEC or Congress logic. Source reviewed at commit
 
 ## Delegate by dependency
 
-Choose `intraday`, `fundamental`, `portfolio` or `alerts`. Generate a plan:
+Choose `intraday`, `intraday_debate`, `fundamental`, `portfolio` or `alerts`. Generate a plan:
 
 ```bash
 python3 CORE_DIR/scripts/agent_workflow.py plan --workflow intraday \
@@ -61,6 +64,11 @@ that can affect the fill: event ID, symbol, side, quantity, quote/time/source,
 stop, fee, exit-fee reserve, slippage and book identity. Pass that JSON file
 using `plan --proposal PROJECT/proposal.json` to get `proposal_sha256`.
 If any input changes, recompute the digest and rerun affected reviews.
+
+`intraday_debate` adds financial analysis and sentiment, then parallel bull and
+bear challenges before budget, risk and final review. It uses one bounded round;
+any required role can block. The coordinator selects at most one ranked entry
+per book snapshot; it does not reserve cash or execute a portfolio allocation.
 
 ## Exchange structured handoffs
 

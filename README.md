@@ -1,6 +1,6 @@
 # India Trade Lab
 
-Indian cash-equity research and paper-trading tools, with a coordinator and twelve specialist AI roles. Built for NSE/BSE, INR and Asia/Kolkata.
+Indian cash-equity research and paper-trading tools, with a coordinator and fifteen specialist AI roles. Built for NSE/BSE, INR and Asia/Kolkata.
 
 **Paper first. No live order execution. No promise of loss-free trading.**
 
@@ -29,6 +29,14 @@ The supplied opening-range rule is a test harness, not a proven trading strategy
 The research worker must be explicitly configured and started. It can poll mapped broker quotes/current candles and collect public crypto data; it produces proposals, not automatic paper fills. There is no live quote stream, real broker order path, US trading adapter, crypto ledger, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
 
 The broker adapters are implemented but require an authorised account session, appropriate data entitlement and a verified symbol/instrument mapping. No account is connected by cloning this repository. Authenticated broker access has not been integration-tested in this project.
+
+## Expanded research lab
+
+[Run the research lab](skills/day-trader-india/references/research-lab.md) for
+Nifty-relative ranking, daily technical patterns, ten-role bull/bear reviews,
+OpenAI/Anthropic/Gemini routing, fresh checkpoint recovery and paper P&L with
+matched-window benchmark comparisons. The source comparison records the
+upstream ideas and the features that remain outside this implementation.
 
 ## Requirements
 
@@ -163,7 +171,7 @@ python3 scripts/install_skills.py --platform codex --scope user --with-agents
 ```
 
 These are alternatives; run the one for your client, or both if you use both.
-The default installs all fourteen skills. `--with-agents` also installs twelve native specialist profiles for that client. Existing files are never replaced.
+The default installs all seventeen skills. `--with-agents` also installs fifteen native specialist profiles for that client. Existing files are never replaced.
 Use `/day-trader-india` in Claude Code or `$day-trader-india` in Codex.
 
 For **Claude web / Desktop**, run `python3 scripts/package_skills.py` and upload

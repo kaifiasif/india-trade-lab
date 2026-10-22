@@ -26,7 +26,7 @@ consume that interval, including after a restart. The normal worker poll is
 
 | Market/component | Implemented | Still required |
 | --- | --- | --- |
-| Indian cash equities | Entitled historical batches, mapped quote/current-bar polling, 50-session shortlist, cost-aware ORB ticket, six model reviewers and final paper proposal | Your data sessions/entitlements, instrument mappings, current calendar, evidence and explicit model configuration |
+| Indian cash equities | Entitled historical batches, mapped quote/current-bar polling, 50-session shortlist, cost-aware ORB ticket, six or ten model reviewers and final paper proposal | Your data sessions/entitlements, instrument mappings, current calendar, evidence and explicit model configuration |
 | US stocks | Exchange-local session router with DST, dated holidays and early closes | US data/broker adapter, strategy evaluation, paper ledger, funding/eligibility review; no US decisions or orders run |
 | Crypto spot | Public Binance metadata, 90 completed UTC daily candles, bid/ask observation, SMA20/50 and daily breakout research | Intraday strategy validation, timestamped execution feed, crypto paper accounting, charges, FX and risk integration |
 | Across markets | One worker status view; execution disabled everywhere | A shared multi-currency portfolio risk ledger before cross-market execution |
@@ -101,7 +101,7 @@ verified normalized exports. A Paytm account alone does not supply them.
 
 ## Configure independent role reviews
 
-Set `model_provider` to `openai` and `model` to an explicitly chosen Responses
+Set `model_provider` to `openai` (or use the [research lab routing options](research-lab.md)) and `model` to an explicitly chosen Responses
 API model supporting structured outputs. Configure `OPENAI_API_KEY` in the
 worker environment or a private environment file, never in Git or chat.
 The default provider is `disabled`, which returns DATA_BLOCK.
@@ -115,7 +115,7 @@ schema, no stored response, bounded tokens/time/bytes and redacted failures.
 Instructions and market evidence are sent to the configured API provider.
 
 Default model budget: 60 reserved calls per IST date, six per candidate,
-maximum three candidates per run. Failed requests consume reserved capacity;
+maximum three candidates per run. The optional ten-role workflow reserves ten calls per candidate. Failed requests consume reserved capacity;
 there are no retries. This is a call/token bound, not an exact rupee cost cap.
 The service does not change model or limits to recover a failed decision.
 
@@ -128,7 +128,7 @@ python3 scripts/market_service.py --config data/observatory/pipeline.json \
 The worker performs scheduled research. Output is BUY_PAPER_PROPOSAL,
 SELL_PAPER_PROPOSAL, HOLD_PAPER, WAIT or DATA_BLOCK. Only a breakout on the
 latest completed bar is eligible. Each ticket is checked against the current
-book; multiple proposals are alternatives, not reserved portfolio allocations.
+book; only the highest-ranked passing entry is selected for that snapshot. Other passing entries are WAIT_ALLOCATION, without cash reservations.
 Revalidate the exact current book and evidence before any manual paper fill.
 Protective sell proposals do not require entry-only evidence or model approval;
 they still need a valid fresh quote and session. They do not execute a stop.
@@ -136,7 +136,7 @@ they still need a valid fresh quote and session. They do not execute a stop.
 `decisions.sqlite` retains runs, agent start/completion events, proposals and
 vetoes. A durable lease excludes concurrent coordinators. Unchanged input
 fingerprints return ARCHIVED_RESULT with current calls blocked. Interrupted
-runs require refreshed evidence. The book checksum and quote freshness are
+runs require refreshed evidence, or explicit `decision_pipeline.py run --resume` within the original 120-second window with unchanged inputs. Saved vetoes remain vetoes; completed runs are archived rather than resumed. The book checksum and quote freshness are
 checked again after model review. Dashboard records older than 120 seconds
 are visibly archived; an old approval is not a current call.
 

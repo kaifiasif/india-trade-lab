@@ -1,0 +1,4 @@
+interface:
+  display_name: "India Bull Researcher"
+  short_description: "Build a source-bound positive research thesis"
+  default_prompt: "Use $india-bull to review the supplied Indian cash-equity evidence and return a read-only handoff."

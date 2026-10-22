@@ -14,6 +14,7 @@ import json
 import re
 import sqlite3
 import sys
+import uuid
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -87,6 +88,7 @@ def create(
     state = {
         "mode": "replay_demo" if replay else "paper_manual",
         "currency": "INR",
+        "book_id": uuid.uuid4().hex,
         "version": 3,
         "policy_id": POLICY_ID,
         "paused": False,
@@ -129,6 +131,8 @@ def fill(
     exit_fee: Numeric | None = None,
     now: dt.datetime | None = None,
     evidence: object = None,
+    target: Numeric | None = None,
+    research_meta: dict | None = None,
 ) -> dict[str, Any]:
     """Return a new state only after all checks pass; do not mutate input."""
     if (
@@ -213,6 +217,25 @@ def fill(
         stop, reserve = number(stop, True), number(exit_fee)
         if not stop < px:
             raise ValueError("Long stop must be below assumed entry")
+        if target is not None and number(target, True) <= px:
+            raise ValueError("Long target must exceed the assumed entry")
+        if research_meta is not None and (
+            not isinstance(research_meta, dict)
+            or set(research_meta)
+            - {"strategy_version", "patterns", "proposal_sha256", "run_id", "execution_kind"}
+            or any(
+                not isinstance(value, str) or len(value) > 200
+                for key, value in research_meta.items()
+                if key != "patterns"
+            )
+            or not isinstance(research_meta.get("patterns"), list)
+            or not 1 <= len(research_meta["patterns"]) <= 10
+            or any(
+                not isinstance(value, str) or not value or len(value) > 80
+                for value in research_meta["patterns"]
+            )
+        ):
+            raise ValueError("Invalid bounded paper-research metadata")
         reserve = Decimal(money(reserve))
         assumed_stop = stop * (1 - slip / 10000)
         loss = (px - assumed_stop) * qty + fee + reserve
@@ -241,6 +264,12 @@ def fill(
             "exit_fee_reserve_inr": money(reserve),
         }
         state["cash"] = money(cash - cost)
+        if target is not None:
+            positions[symbol]["target_inr"] = str(number(target, True))
+            event["target_inr"] = str(number(target, True))
+        if research_meta is not None:
+            positions[symbol]["research_meta"] = copy.deepcopy(research_meta)
+            event["research_meta"] = copy.deepcopy(research_meta)
         event.update(
             qty=qty,
             stop_inr=str(stop),
@@ -293,6 +322,11 @@ def main() -> int:
             p.add_argument("--qty", type=int, required=True)
             p.add_argument("--stop-inr", required=True)
             p.add_argument("--exit-fee-reserve-inr", required=True)
+            p.add_argument("--target-inr")
+            p.add_argument(
+                "--patterns", help="Comma-separated research labels retained for attribution"
+            )
+            p.add_argument("--strategy-version", default="manual_unversioned")
             p.add_argument(
                 "--evidence", type=Path, help="Required pre-trade JSON for forward entries"
             )
@@ -356,6 +390,13 @@ def main() -> int:
                         getattr(args, "stop_inr", None),
                         getattr(args, "exit_fee_reserve_inr", None),
                         evidence=evidence,
+                        target=getattr(args, "target_inr", None),
+                        research_meta={
+                            "patterns": args.patterns.split(","),
+                            "strategy_version": args.strategy_version,
+                        }
+                        if getattr(args, "patterns", None)
+                        else None,
                     )
             if args.command != "status":
                 seal_state(state)
