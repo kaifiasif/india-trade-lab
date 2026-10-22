@@ -79,7 +79,7 @@ class SkillDistributionTests(unittest.TestCase):
             )
             state = json.loads(subprocess.check_output(base + ["status"], cwd=temporary))
             self.assertEqual(state["mode"], "replay_demo")
-            for script in ("broker_data.py", "paper_book.py", "india_research.py"):
+            for script in ("broker_data.py", "paper_book.py", "india_research.py", "engine.py"):
                 subprocess.run(
                     [sys.executable, str(skill / "scripts" / script), "--help"],
                     cwd=temporary,
@@ -120,7 +120,7 @@ class SkillDistributionTests(unittest.TestCase):
             self.assertEqual(list(outside.iterdir()), [])
 
     def test_original_cli_paths_still_work(self):
-        for name in ("broker_data.py", "paper_book.py", "india_research.py"):
+        for name in ("broker_data.py", "paper_book.py", "india_research.py", "engine.py"):
             with self.subTest(script=name):
                 subprocess.run(
                     [sys.executable, str(ROOT / "scripts" / name), "--help"],

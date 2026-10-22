@@ -7,7 +7,7 @@ exclude = ["dist"]
 select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["broker_data", "india_research", "paper_book", "skill_tools"]
+known-first-party = ["broker_data", "engine", "india_research", "paper_book", "skill_tools"]
 
 [tool.ruff.format]
 quote-style = "double"
