@@ -442,8 +442,12 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
                 "/": "index.html",
                 "/index.html": "index.html",
                 "/app.js": "app.js",
+                "/scene.js": "scene.js",
                 "/style.css": "style.css",
                 "/mascot.svg": "mascot.svg",
+                "/favicon.svg": "favicon.svg",
+                # Bundled, pinned Three.js (see vendor/THIRD-PARTY.md); no CDN is used.
+                "/vendor/three.module.min.js": "vendor/three.module.min.js",
             }
             if route not in files:
                 self.json_response(404, {"error": "Not found"})

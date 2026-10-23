@@ -96,17 +96,23 @@ document.querySelectorAll("[data-nav]").forEach((link) =>
             .forEach((item) => item.classList.toggle("active", item === link));
     }),
 );
+let scenes = null;
+function setView(flat) {
+    const webgl = Boolean(scenes?.pipeline);
+    $("flow-scene").classList.toggle("flat", flat);
+    $("flow-scene").classList.toggle("webgl", webgl && !flat);
+    $("pipeline-3d").hidden = !webgl || flat;
+    $("view-flat").classList.toggle("selected", flat);
+    $("view-3d").classList.toggle("selected", !flat);
+    $("view-flat").setAttribute("aria-pressed", String(flat));
+    $("view-3d").setAttribute("aria-pressed", String(!flat));
+    if (webgl && !flat) scenes.pipeline.resize();
+}
 for (const [id, flat] of [
     ["view-3d", false],
     ["view-flat", true],
 ])
-    $(id).addEventListener("click", () => {
-        $("flow-scene").classList.toggle("flat", flat);
-        $("view-flat").classList.toggle("selected", flat);
-        $("view-3d").classList.toggle("selected", !flat);
-        $("view-flat").setAttribute("aria-pressed", String(flat));
-        $("view-3d").setAttribute("aria-pressed", String(!flat));
-    });
+    $(id).addEventListener("click", () => setView(flat));
 $("call-filters").addEventListener("click", (event) => {
     const button = event.target.closest("[data-filter]");
     if (!button) return;
@@ -218,9 +224,8 @@ function showDetails(title, event, call = false) {
     container.append(raw);
     openDialog("detail-dialog");
 }
-function renderStages() {
-    const agents = state?.agents?.slice(0, 5) || [];
-    const throughput = {
+function stageCounts() {
+    return {
         data: state?.metrics?.quotes || 0,
         strategy: state?.metrics?.proposals || 0,
         risk: (state?.events || []).filter((e) => e.kind === "risk_passed")
@@ -228,7 +233,21 @@ function renderStages() {
         execution: (state?.calls || []).filter((e) => e.status === "filled")
             .length,
         journal: state?.metrics?.fills || 0,
+        blocked: (state?.agents || [])
+            .slice(0, 5)
+            .filter((agent) => agent.status === "blocked")
+            .map((agent) => agent.id),
     };
+}
+function selectStage(id) {
+    selectedStage = id;
+    renderStages();
+    renderInspector();
+    scenes?.pipeline?.update(state, stageCounts(), selectedStage);
+}
+function renderStages() {
+    const agents = state?.agents?.slice(0, 5) || [];
+    const throughput = stageCounts();
     const captions = {
         data: "Validated candles",
         strategy: "Entry proposals",
@@ -247,11 +266,9 @@ function renderStages() {
     $("stages")
         .querySelectorAll("[data-stage]")
         .forEach((button) =>
-            button.addEventListener("click", () => {
-                selectedStage = button.dataset.stage;
-                renderStages();
-                renderInspector();
-            }),
+            button.addEventListener("click", () =>
+                selectStage(button.dataset.stage),
+            ),
         );
 }
 function renderInspector() {
@@ -510,19 +527,51 @@ function renderResearch() {
               .join("")}</div>`
         : '<p class="section-note">Crypto data collection is opt in. No crypto paper ledger or execution is connected.</p>';
 }
+// Headline numbers glide to a new recorded value so a change is noticed, not missed.
+const shown = new Map();
+function countTo(id, value, format) {
+    const element = $(id);
+    const target = Number(value);
+    const previous = shown.get(id);
+    shown.set(id, target);
+    if (
+        value == null ||
+        !Number.isFinite(target) ||
+        previous == null ||
+        previous === target ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+        element.textContent = value == null ? "—" : format(value);
+        return;
+    }
+    const start = performance.now();
+    element.classList.add("changing");
+    const tick = (now) => {
+        const k = Math.min(1, (now - start) / 700);
+        const eased = 1 - (1 - k) ** 3;
+        element.textContent = format(previous + (target - previous) * eased);
+        if (k < 1 && shown.get(id) === target) requestAnimationFrame(tick);
+        else {
+            if (shown.get(id) === target) element.textContent = format(value);
+            element.classList.remove("changing");
+        }
+    };
+    requestAnimationFrame(tick);
+}
+const whole = (value) => String(Math.round(Number(value)));
 function render() {
     const metrics = state?.metrics || {};
-    $("equity").textContent = money(metrics.equity_inr);
+    countTo("equity", metrics.equity_inr, money);
     $("initial").textContent = money(metrics.initial_cash_inr);
-    $("pnl").textContent = money(metrics.realized_inr);
+    countTo("pnl", metrics.realized_inr, money);
     $("pnl").className =
         Number(metrics.realized_inr) > 0
             ? "positive"
             : Number(metrics.realized_inr) < 0
               ? "negative"
               : "";
-    $("proposals").textContent = metrics.proposals ?? "—";
-    $("positions-count").textContent = metrics.open_positions ?? "—";
+    countTo("proposals", metrics.proposals, whole);
+    countTo("positions-count", metrics.open_positions, whole);
     $("proposal-detail").textContent =
         metrics.quotes == null
             ? "Awaiting observations"
@@ -585,6 +634,31 @@ function render() {
     renderHistory();
     renderWatchlist();
     renderResearch();
+    scenes?.pipeline?.update(state, stageCounts(), selectedStage);
+    scenes?.tape?.update(state);
+}
+// The 3D scenes are an enhancement: without WebGL, or if the bundle fails to load,
+// the flat stage list and the tables below remain the complete interface.
+async function loadScenes() {
+    try {
+        const module = await import("./scene.js");
+        if (!module.webglAvailable()) throw new Error("WebGL unavailable");
+        scenes = {
+            pipeline: new module.PipelineScene($("pipeline-3d"), {
+                onSelect: selectStage,
+            }),
+            tape: new module.TapeScene($("tape-3d")),
+        };
+        setView(false);
+    } catch {
+        scenes = null;
+        document.body.classList.add("no-webgl");
+        $("tape-3d").querySelector(".tape-empty").textContent =
+            "The 3D tape needs WebGL in this browser. Every fill is still listed under Trade calls.";
+        setView(true);
+        $("view-3d").disabled = true;
+        $("view-3d").title = "3D view needs WebGL in this browser";
+    }
 }
 async function initialize() {
     try {
@@ -607,6 +681,7 @@ async function initialize() {
             state = { status: "idle", events: [], agents: [], calls: [] };
         }
     }
+    await loadScenes();
     render();
     if (!preview)
         setInterval(async () => {

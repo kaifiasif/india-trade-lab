@@ -77,6 +77,10 @@ The daily research desk also reads persisted model handoffs, proposals, worker
 sessions and crypto observations when configured. These records are separate
 from synthetic replay fills. No model activity is fabricated for the preview.
 
+The funnel and the session tape render in 3D with a bundled copy of Three.js
+(no CDN), and fall back to the flat view without WebGL. The optional
+[recap video](recap-video/README.md) renders a recorded session to MP4 with Remotion.
+
 Books and event logs live under `data/observatory/` and are retained between runs.
 Historical coverage and import instructions are in [the observatory guide](docs/observatory.md).
 

@@ -2182,3 +2182,278 @@ th {
         grid-template-columns: 1fr;
     }
 }
+
+/* ---------- 3D observatory: WebGL pipeline and session tape ---------- */
+.webgl-host {
+    position: relative;
+    overflow: hidden;
+}
+.webgl-host canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: pan-y;
+}
+.webgl-host canvas:active {
+    cursor: grabbing;
+}
+.flow-scene.webgl .flow-stack,
+.flow-scene.webgl .flow-axis,
+.flow-scene.webgl .scene-grid {
+    display: none;
+}
+.flow-scene.webgl {
+    min-height: 430px;
+}
+.pipeline-host {
+    position: absolute;
+    inset: 0 0 44px;
+}
+.flow-scene.webgl .flow-legend {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    margin: 0;
+}
+.scene-labels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.scene-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 9px 5px 5px;
+    border: 1px solid #e6e1f0;
+    border-radius: 999px;
+    background: #ffffffe8;
+    box-shadow: 0 6px 16px #6a52a314;
+    color: var(--ink);
+    font-size: 10px;
+    white-space: nowrap;
+    pointer-events: auto;
+    transition:
+        opacity 0.2s,
+        border-color 0.2s,
+        background 0.2s,
+        box-shadow 0.2s;
+    will-change: transform;
+}
+.scene-label:hover {
+    border-color: #c9b9ea;
+}
+.scene-label-step {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #f0ebf8;
+    color: #8f77bd;
+    font-size: 9px;
+}
+.scene-label-name {
+    font-weight: 550;
+}
+.scene-label-count {
+    color: #7c649b;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+.scene-label.selected {
+    border-color: #b5a0df;
+    background: #f6f2ff;
+    box-shadow: 0 8px 22px #6a52a32b;
+}
+.scene-label.selected .scene-label-step {
+    background: var(--purple);
+    color: white;
+}
+.scene-label.blocked .scene-label-step {
+    background: #fae9ec;
+    color: #b86573;
+}
+.scene-label-count.bump {
+    animation: bump 0.5s ease-out;
+}
+@keyframes bump {
+    40% {
+        transform: scale(1.35);
+        color: var(--purple);
+    }
+}
+.metric > strong.changing {
+    color: var(--purple);
+    transition: color 0.3s;
+}
+
+.tape-panel {
+    margin-top: 23px;
+    margin-bottom: 23px;
+}
+.tape-hint {
+    margin: 0;
+    font-size: 9px;
+    color: #aaa3b6;
+}
+.tape-host {
+    height: 360px;
+    margin: 0 23px;
+    border-radius: 14px;
+    background:
+        radial-gradient(ellipse at 50% 85%, #efe9fd 0%, transparent 70%),
+        linear-gradient(180deg, #fff, #fbfaff);
+    border: 1px solid #f0edf6;
+}
+.tape-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.tape-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 9px;
+    white-space: nowrap;
+    transition: opacity 0.25s;
+    will-change: transform;
+}
+.tape-label.time {
+    color: #aaa3b6;
+    font-variant-numeric: tabular-nums;
+}
+.tape-label.pin {
+    padding: 3px 7px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 550;
+    box-shadow: 0 4px 12px #2525321a;
+}
+.tape-label.pin.buy {
+    background: var(--green);
+}
+.tape-label.pin.sell {
+    background: var(--purple);
+}
+.tape-label.plan {
+    font-weight: 550;
+}
+.tape-label.plan.stop {
+    color: var(--red);
+}
+.tape-label.plan.target {
+    color: var(--green);
+}
+.tape-tooltip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 5px 9px;
+    border-radius: 7px;
+    background: var(--ink);
+    color: white;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.tape-tooltip.show {
+    opacity: 1;
+}
+.tape-empty {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    display: none;
+    place-items: center;
+    padding: 0 30px;
+    text-align: center;
+    font-size: 11px;
+    color: #9e96aa;
+    pointer-events: none;
+}
+.tape-host.empty .tape-empty,
+.no-webgl .tape-empty {
+    display: grid;
+}
+.no-webgl .tape-hint,
+.no-webgl .tape-legend {
+    display: none;
+}
+.tape-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 0;
+    padding: 14px 23px 20px;
+    list-style: none;
+    font-size: 9px;
+    color: #8f889b;
+}
+.tape-legend li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.swatch {
+    width: 14px;
+    height: 6px;
+    border-radius: 3px;
+}
+.swatch.price {
+    background: #c9bbf0;
+    box-shadow: inset 0 -2px 0 var(--purple);
+}
+.swatch.buy {
+    background: var(--green);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.swatch.sell {
+    background: var(--purple);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.swatch.stop {
+    background: #bb5a6533;
+    border: 1px solid #bb5a6577;
+}
+.swatch.target {
+    background: #35897733;
+    border: 1px solid #35897777;
+}
+@media (max-width: 800px) {
+    .flow-scene.webgl {
+        min-height: 380px;
+    }
+    .tape-host {
+        height: 280px;
+        margin: 0 14px;
+    }
+    .tape-hint {
+        display: none;
+    }
+    .scene-label-name {
+        display: none;
+    }
+    .scene-label {
+        padding-right: 7px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .scene-label,
+    .tape-label {
+        transition: none;
+    }
+}

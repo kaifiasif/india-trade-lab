@@ -40,9 +40,16 @@ npm exec --yes --package=prettier@3.6.2 -- prettier --write \
 npm exec --yes --package=prettier@3.6.2 -- prettier --parser html --write \
   skills/day-trader-india/assets/observatory/mascot.svg
 node --check skills/day-trader-india/assets/observatory/app.js
+node --check skills/day-trader-india/assets/observatory/scene.js
 ```
 
-Browser checks should cover stage selection, call inspection, filters, empty and
-connection-error states, keyboard access, reduced motion and a narrow viewport.
+`vendor/three.module.min.js` is an unmodified, pinned third-party build; do not
+format or edit it. To upgrade it, replace the file and update the version and
+checksums in `vendor/THIRD-PARTY.md`. The optional `recap-video/` folder is a
+separate Node project; check it with `npm run lint` there.
+
+Browser checks should cover stage selection (including the 3D stage labels), call
+inspection, filters, empty and connection-error states, keyboard access, reduced
+motion, a browser without WebGL and a narrow viewport.
 The Python API tests exercise actual synthetic replays and reject unauthorized
 control requests. Keep archived previews clearly distinct from a connected engine.
