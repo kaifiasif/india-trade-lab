@@ -45,6 +45,8 @@ stock-market schedules, rather than filling every gap with a trade.
 2. `sessions.json`: sourced date-by-date Asia/Kolkata sessions, including
    `open`, `close`, `entry_cutoff` and `flat_by`. The latter two must precede
    close. Unknown dates block; explicit null dates mark closures for routing.
+   A sourced NSE calendar for April–December 2026 is bundled as
+   [nse-sessions-2026.json](../assets/nse-sessions-2026.json).
    Apply the exchange circular and the selected instruments' applicable
    continuous-market close, including CAS changes, rather than copying the
    synthetic example. Use a homogeneous session calendar for a universe.
