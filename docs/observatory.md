@@ -13,12 +13,23 @@ The UI and Python backend ship together in the portable `day-trader-india` skill
 
 | View | Source |
 | --- | --- |
-| 3D/flat funnel | Persisted data, strategy, gate, paper executor and journal events |
+| 3D/flat funnel | Persisted data, strategy, gate, paper executor and journal events. In 3D, each newly recorded event travels as a particle between the stages it reached; blocked events turn red and drop at the stage that stopped them |
+| Session tape | The replay's recorded bids as a 3D ribbon, with each paper fill and the planned stop and target while the position was open |
 | Decision inspector | Recorded explanations and event payloads, not private model reasoning |
 | Trade calls | Assumed entry/exit fills, rejected orders, quantity, stop and target |
 | Activity stream | Filterable decisions, observations, blocks and alerts |
 | History coverage | Retained complete sessions, source kind and a 50-session research baseline |
 | Specialist bench | Idle portable research skills; no LLM providers are connected |
+
+The 3D views use Three.js 0.170.0, bundled under
+`assets/observatory/vendor/` with its licence and checksum, so the page still
+loads nothing from outside your computer. Drag a scene to turn it and
+double-click to reset. Without WebGL, the page uses the flat funnel and the
+tables; with reduced motion, nothing animates but every value is still shown.
+The 3D views only draw recorded events and prices.
+
+To turn a recorded session into a shareable video, see the
+[recap video](../recap-video/README.md).
 
 Run a normal replay, a missing-bar scenario or an oversized-proposal scenario.
 All use made-up `NSE:DEMO` data. Replays run automatically through the actual

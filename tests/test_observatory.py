@@ -112,7 +112,22 @@ class ObservatoryTests(unittest.TestCase):
                 app.worker.join(5)
                 with urlopen(base + "/api/state", timeout=3) as response:
                     self.assertEqual(json.load(response)["metrics"]["fills"], 2)
+                web = (
+                    Path(__file__).resolve().parents[1]
+                    / "skills/day-trader-india/assets/observatory"
+                )
+                for path, filename in (
+                    ("/vendor/three.module.min.js", "vendor/three.module.min.js"),
+                    ("/scene.js", "scene.js"),
+                    ("/favicon.svg", "favicon.svg"),
+                ):
+                    with urlopen(base + path, timeout=3) as response:
+                        self.assertEqual(response.read(), (web / filename).read_bytes())
+                        self.assertIn(
+                            "script-src 'self'", response.headers["Content-Security-Policy"]
+                        )
                 for path, headers in (
+                    ("/vendor/THIRD-PARTY.md", {}),
                     ("/../README.md", {}),
                     ("/api/state", {"Host": "attacker.test"}),
                 ):

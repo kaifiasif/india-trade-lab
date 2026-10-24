@@ -9,6 +9,7 @@
             name="description"
             content="Follow each recorded decision from market data to your paper journal."
         />
+        <link rel="icon" href="favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="style.css" />
         <script type="module" src="app.js"></script>
     </head>
@@ -37,6 +38,9 @@
                 <a class="nav-link" href="#flow" data-nav="flow"
                     ><span>♧</span> Agent flow
                     <span class="nav-count">8</span></a
+                >
+                <a class="nav-link" href="#tape" data-nav="tape"
+                    ><span>◬</span> Session tape</a
                 >
                 <a class="nav-link" href="#calls" data-nav="calls"
                     ><span>⌁</span> Trade calls</a
@@ -182,10 +186,20 @@
                             ><span class="session-clock" id="clock">— IST</span>
                         </div>
                         <div class="flow-scene" id="flow-scene">
+                            <div
+                                class="webgl-host pipeline-host"
+                                id="pipeline-3d"
+                                hidden
+                            >
+                                <div
+                                    class="scene-labels"
+                                    aria-label="Pipeline stages"
+                                ></div>
+                            </div>
                             <div class="scene-grid"></div>
                             <div class="flow-axis"></div>
                             <div class="flow-stack" id="stages"></div>
-                            <div class="flow-legend">
+                            <div class="flow-legend" id="flow-legend">
                                 <span class="legend-dot"></span> Recorded stage
                                 activity <span>·</span> Select a stage to
                                 inspect
@@ -255,6 +269,46 @@
                         </section>
                     </aside>
                 </div>
+                <section
+                    class="panel tape-panel"
+                    id="tape"
+                    aria-labelledby="tape-title"
+                >
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">THE SESSION, IN DEPTH</p>
+                            <h2 id="tape-title">Session tape</h2>
+                        </div>
+                        <p class="tape-hint" id="tape-hint">
+                            Drag to turn · double-click to reset
+                        </p>
+                    </div>
+                    <p class="section-note" id="tape-note">
+                        Recorded bid prices for the replayed session, with each
+                        paper fill and the planned stop and target while the
+                        position was open.
+                    </p>
+                    <div class="webgl-host tape-host empty" id="tape-3d">
+                        <div class="tape-overlay" aria-hidden="true"></div>
+                        <div
+                            class="tape-tooltip"
+                            role="status"
+                            aria-live="polite"
+                        ></div>
+                        <p class="tape-empty">
+                            Run a paper replay to draw the session here.
+                        </p>
+                    </div>
+                    <ul class="tape-legend" aria-label="Tape legend">
+                        <li><span class="swatch price"></span>Recorded bid</li>
+                        <li><span class="swatch buy"></span>Paper entry</li>
+                        <li><span class="swatch sell"></span>Paper exit</li>
+                        <li><span class="swatch stop"></span>Planned stop</li>
+                        <li>
+                            <span class="swatch target"></span>Planned target
+                        </li>
+                    </ul>
+                </section>
                 <section class="panel research-panel" id="research">
                     <div class="panel-header">
                         <div>

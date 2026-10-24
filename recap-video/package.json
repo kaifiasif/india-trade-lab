@@ -1,0 +1,28 @@
+{
+  "name": "india-trade-lab-recap-video",
+  "version": "1.0.0",
+  "description": "Renders an animated recap of one recorded paper session from the observatory export.",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.528",
+    "@remotion/transitions": "4.0.528",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.528"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "studio": "remotion studio --props=sample/synthetic-recap.json",
+    "render:sample": "remotion render Recap out/synthetic-recap.mp4 --props=sample/synthetic-recap.json",
+    "render": "remotion render Recap",
+    "lint": "tsc"
+  }
+}
