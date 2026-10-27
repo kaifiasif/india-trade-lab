@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* India Trade Lab tokens: the light purple brand, refined; a dark twin under .dark. */
+@layer base {
+  :root {
+    --background: 250 33% 98.6%;
+    --foreground: 246 24% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 246 24% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 246 24% 13%;
+    --primary: 254 52% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 252 30% 95.5%;
+    --secondary-foreground: 252 30% 24%;
+    --muted: 250 22% 95.5%;
+    --muted-foreground: 247 9% 40%;
+    --accent: 254 70% 96%;
+    --accent-foreground: 254 45% 38%;
+    --success: 161 46% 33%;
+    --success-foreground: 0 0% 100%;
+    --warning: 34 86% 40%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 352 50% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 250 20% 90%;
+    --input: 250 20% 86%;
+    --ring: 254 52% 56%;
+    --sidebar: 252 36% 97%;
+    --sidebar-foreground: 246 20% 22%;
+    --radius: 0.75rem;
+    --chart-price: 254 52% 56%;
+    --chart-grid: 250 20% 92%;
+  }
+  .dark {
+    --background: 248 24% 7%;
+    --foreground: 250 25% 95%;
+    --card: 248 22% 10%;
+    --card-foreground: 250 25% 95%;
+    --popover: 248 22% 11%;
+    --popover-foreground: 250 25% 95%;
+    --primary: 254 82% 74%;
+    --primary-foreground: 248 30% 10%;
+    --secondary: 248 18% 16%;
+    --secondary-foreground: 250 25% 92%;
+    --muted: 248 18% 14%;
+    --muted-foreground: 248 12% 66%;
+    --accent: 254 30% 18%;
+    --accent-foreground: 254 85% 84%;
+    --success: 158 52% 52%;
+    --success-foreground: 160 60% 8%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 36 80% 10%;
+    --destructive: 352 78% 68%;
+    --destructive-foreground: 352 60% 10%;
+    --border: 248 16% 19%;
+    --input: 248 16% 24%;
+    --ring: 254 82% 74%;
+    --sidebar: 248 24% 8.5%;
+    --sidebar-foreground: 250 20% 88%;
+    --chart-price: 254 82% 74%;
+    --chart-grid: 248 16% 16%;
+  }
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

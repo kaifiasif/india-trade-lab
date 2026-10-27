@@ -116,10 +116,11 @@ class ObservatoryTests(unittest.TestCase):
                     Path(__file__).resolve().parents[1]
                     / "skills/day-trader-india/assets/observatory"
                 )
+                bundle = next((web / "assets").glob("index-*.js"))
                 for path, filename in (
-                    ("/vendor/three.module.min.js", "vendor/three.module.min.js"),
-                    ("/scene.js", "scene.js"),
+                    ("/", "index.html"),
                     ("/favicon.svg", "favicon.svg"),
+                    (f"/assets/{bundle.name}", f"assets/{bundle.name}"),
                 ):
                     with urlopen(base + path, timeout=3) as response:
                         self.assertEqual(response.read(), (web / filename).read_bytes())
@@ -127,7 +128,7 @@ class ObservatoryTests(unittest.TestCase):
                             "script-src 'self'", response.headers["Content-Security-Policy"]
                         )
                 for path, headers in (
-                    ("/vendor/THIRD-PARTY.md", {}),
+                    ("/assets/missing.js", {}),
                     ("/../README.md", {}),
                     ("/api/state", {"Host": "attacker.test"}),
                 ):

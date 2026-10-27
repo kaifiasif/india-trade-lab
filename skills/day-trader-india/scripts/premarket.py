@@ -30,6 +30,7 @@ import datetime as dt
 import html
 import json
 import os
+import re
 import smtplib
 import sqlite3
 import sys
@@ -620,13 +621,22 @@ reference refreshed {esc(report["reference_refreshed"])}</footer>
 
 
 def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
-    """Send the report over SMTP. Off unless smtp_host and recipients are configured."""
-    host, recipients = config.get("smtp_host"), config.get("email_to")
-    if not host or not recipients:
-        return {"sent": False, "reason": "email is not configured (smtp_host and email_to)"}
-    password = os.environ.get("SMTP_PASSWORD")
+    """Send the report over SMTP. Off unless smtp_host, smtp_user and recipients are set.
+
+    The password comes from the environment or the owner-only secret store, never JSON.
+    """
+    import secret_store
+
+    recipients = config.get("email_to")
+    if not recipients:
+        return {"sent": False, "reason": "email is not configured (email_to)"}
+    if not config.get("smtp_host") or not config.get("smtp_user"):
+        return {"sent": False, "reason": "set the mail server and sender in Setup → Email"}
+    password = os.environ.get("SMTP_PASSWORD") or secret_store.get("SMTP_PASSWORD")
     if not password:
-        return {"sent": False, "reason": "SMTP_PASSWORD is not set in this environment"}
+        return {"sent": False, "reason": "no SMTP password saved (Setup → Email)"}
+    if not public_mail_host(config["smtp_host"]):
+        return {"sent": False, "reason": "the mail server must be a public host name"}
     message = EmailMessage()
     message["Subject"] = f"Pre-market watchlist {report['session_date']}: " + (
         ", ".join(report["watching"]) or "nothing today"
@@ -639,17 +649,36 @@ def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
     )
     message.add_alternative(page, subtype="html")
     try:
-        with smtplib.SMTP(host, int(config.get("smtp_port", 587)), timeout=30) as smtp:
+        with smtplib.SMTP(
+            config["smtp_host"], int(config.get("smtp_port", 587)), timeout=30
+        ) as smtp:
             smtp.starttls()
             smtp.login(config["smtp_user"], password)
             smtp.send_message(message)
+    except smtplib.SMTPAuthenticationError:
+        return {"sent": False, "reason": "the mail server rejected the sender or app password"}
     except (OSError, smtplib.SMTPException):
         # Never echo the server's reply: it can carry the account address or token state.
         return {
             "sent": False,
             "reason": "the mail server refused the message or could not be reached",
         }
-    return {"sent": True, "to": message["To"]}
+    return {"sent": True, "to": secret_store.mask_email(message["To"])}
+
+
+def public_mail_host(host: str) -> bool:
+    """Refuse IP literals and names that resolve to private, loopback or link-local
+    addresses, so a settings change cannot point the mailer at internal services."""
+    import ipaddress
+    import socket
+
+    if not re.fullmatch(r"(?=.{1,253}$)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}", host or ""):
+        return False
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
+    except OSError:
+        return False
+    return bool(addresses) and all(ipaddress.ip_address(item).is_global for item in addresses)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -23,3 +23,5 @@ htmlcov/
 .agents/skills/
 .cursor/skills/
 .github/skills/
+node_modules/
+*.tsbuildinfo

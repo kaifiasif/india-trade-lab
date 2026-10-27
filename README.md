@@ -52,8 +52,8 @@ itl dashboard    # the local dashboard, including Today's desk
 ## What to expect in week 1
 
 - **Costs:** Kite Connect is ₹500 a month for market data. Hosting on Oracle Cloud Always Free is ₹0. The agents cost ₹0 on Gemini's free tier, or roughly ₹130 a month with Claude (13 calls each morning, plus intraday reviews you cap with `max_model_calls_per_day`).
-- **Setup:** about an hour once: a Kite app, 180 days of history, a Gmail app password. Follow [deploy on Oracle Cloud](docs/deploy-oracle.md), or [live data setup](docs/live-data.md) to run on your own computer.
-- **Daily effort:** about two minutes each morning for the Kite login and the two checks.
+- **Setup:** about an hour once, all from the dashboard's **Setup** page: a Kite app, 180 days of history, an email app password. Keys go into an owner-only file, never into JSON. Follow [deploy on Oracle Cloud](docs/deploy-oracle.md), or [live data setup](docs/live-data.md) to run on your own computer.
+- **Daily effort:** about two minutes each morning for the Kite login and the two checks, from the dashboard on your phone.
 - **First results:** the tournament may find that no strategy has earned money at double costs on your history yet. Then the desk **sits out** and records no trades. That is the safe outcome, not a fault. To collect paper trades anyway, set `"strategy": {"require_proven": false}`, for paper only.
 - **Judge picks:** need a model key. Without one, the report uses the plain score ranking and says so.
 
@@ -66,8 +66,8 @@ itl dashboard    # the local dashboard, including Today's desk
 - **Intraday review:** six evidence roles, bull/bear and risk debates, a five-tier rating that can only stop or downgrade an entry, and decision memory. See [debate.md](skills/day-trader-india/references/debate.md).
 - **Paper journal and engine:** cash, risk, daily-loss, trade-count, streak and drawdown limits; stale-quote rejection; checksummed state; restart recovery. See [engine.md](skills/day-trader-india/references/engine.md).
 - **Paper autopilot:** records approved entries and every exit in the virtual book, all session (opt in).
-- **Dashboard:** a 3D decision funnel, Today's desk, session tape, calls, research and risk panels.
-- **Backtests and checks:** a backtest grid with doubled costs ([backtest.md](skills/day-trader-india/references/backtest.md)), a preflight check that names every missing input and its fix, and 213 offline tests.
+- **Dashboard:** a React app in light and dark: Today, the pre-market desk, a paper replay, research, the agents, an 11-step Setup and Settings. Animated SVG mascots react to what the desk records. See [observatory.md](docs/observatory.md).
+- **Backtests and checks:** a backtest grid with doubled costs ([backtest.md](skills/day-trader-india/references/backtest.md)), a preflight check that names every missing input and its fix, and 224 offline tests.
 - **Portable skills:** 17 skills (the trading desk, a developer skill and 15 specialist roles) for Claude, Codex and other agents.
 
 ## What it does not do

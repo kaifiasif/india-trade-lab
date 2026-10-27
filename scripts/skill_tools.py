@@ -75,6 +75,7 @@ def skill_files(name: str, root: Path = ROOT) -> list[Path]:
             ".html",
             ".css",
             ".js",
+            ".woff2",
         }:
             raise ValueError(f"Unexpected resource type: {relative}")
         files.append(path)
