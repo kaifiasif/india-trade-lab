@@ -8,6 +8,7 @@ import concurrent.futures
 import datetime as dt
 import hashlib
 import json
+import re
 import sqlite3
 import threading
 import uuid
@@ -305,6 +306,12 @@ class DailyCoordinator:
             )
         if any(type(value) is not bool for value in cfg["autopilot"].values()):
             raise ValueError("Autopilot settings must be true or false")
+        if cfg["smtp_host"] and not re.fullmatch(
+            r"(?=.{1,253}$)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}", str(cfg["smtp_host"])
+        ):
+            raise ValueError("smtp_host must be a mail server name such as smtp.gmail.com")
+        if cfg["smtp_port"] not in (25, 465, 587, 2525):
+            raise ValueError("smtp_port must be 25, 465, 587 or 2525")
         if not isinstance(cfg["market_feeds"], list) or len(cfg["market_feeds"]) > 5:
             raise ValueError("market_feeds must be a list of at most five feed URLs")
         if cfg.get("version") != 1 or cfg.get("mode") != "paper_research":

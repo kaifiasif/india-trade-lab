@@ -154,10 +154,41 @@ class EmailTests(Isolated):
                 def send_message(self, message):
                     sent.append(message["To"])
 
-            with patch("smtplib.SMTP", FakeSMTP):
+            with (
+                patch("smtplib.SMTP", FakeSMTP),
+                patch.object(premarket, "public_mail_host", return_value=True),
+            ):
                 result = premarket.send_email(report, "<p>x</p>", config)
         self.assertTrue(result["sent"])
+        self.assertEqual(result["to"], "m***@example.com")
         self.assertEqual(sent[1], ("me@example.com", "abcd efgh ijkl mnop"))
+
+
+class HardeningTests(Isolated):
+    def test_mail_server_cannot_point_at_internal_addresses(self):
+        import premarket
+
+        for host in ("127.0.0.1", "localhost", "10.0.0.5", "metadata.google.internal", ""):
+            self.assertFalse(premarket.public_mail_host(host), host)
+        with patch("socket.getaddrinfo", return_value=[(0, 0, 0, "", ("169.254.169.254", 0))]):
+            self.assertFalse(premarket.public_mail_host("evil.example.com"))
+        with patch("socket.getaddrinfo", return_value=[(0, 0, 0, "", ("142.250.4.108", 0))]):
+            self.assertTrue(premarket.public_mail_host("smtp.gmail.com"))
+
+    def test_logs_mask_email_addresses(self):
+        self.assertEqual(
+            secret_store.scrub("sent to kaifi.asif@gmail.com ok"), "sent to k***@gmail.com ok"
+        )
+
+    def test_rate_limiter_blocks_then_recovers(self):
+        import setup_api
+
+        now = [0.0]
+        limiter = setup_api.RateLimiter(clock=lambda: now[0])
+        self.assertEqual([limiter.check("x", 2) for _ in range(2)], [0.0, 0.0])
+        self.assertGreater(limiter.check("x", 2), 0)
+        now[0] = 61
+        self.assertEqual(limiter.check("x", 2), 0.0)
 
 
 class HttpTests(Isolated):
@@ -228,6 +259,31 @@ class HttpTests(Isolated):
         self.assertNotIn(SECRET, audit)
         self.assertIn('"keys_changed": ["KITE_API_SECRET"]', audit)
         self.assertTrue(self.get("/api/health")["paper_only"])
+
+    def test_logins_are_rate_limited(self):
+        self.post("init_project", {})
+        codes = []
+        for _ in range(6):
+            try:
+                self.post("kite_exchange", {"redirect_url": "x"})
+            except HTTPError as error:
+                codes.append(error.code)
+        self.assertEqual(codes[-1], 429)
+
+    def test_uploads_must_look_like_the_nse_list(self):
+        for text in ("<script>alert(1)</script>", "SYMBOL,NAME\nA,B", "SYMBOL,ISIN NUMBER\x00"):
+            status = self.status_of(
+                lambda text=text: self.post("upload_equity_list", {"csv_text": text})
+            )
+            self.assertEqual(status, 422)
+
+    def test_pages_carry_the_security_headers(self):
+        with urlopen(self.base + "/api/health", timeout=5) as response:
+            headers = response.headers
+        self.assertIn("object-src 'none'", headers["Content-Security-Policy"])
+        self.assertEqual(headers["X-Frame-Options"], "DENY")
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(headers["Cross-Origin-Opener-Policy"], "same-origin")
 
     def test_static_files_cannot_escape_the_web_folder(self):
         for path in ("/../README.md", "/%2e%2e/README.md", "/.hidden", "/notes.md"):

@@ -30,6 +30,7 @@ import datetime as dt
 import html
 import json
 import os
+import re
 import smtplib
 import sqlite3
 import sys
@@ -634,6 +635,8 @@ def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
     password = os.environ.get("SMTP_PASSWORD") or secret_store.get("SMTP_PASSWORD")
     if not password:
         return {"sent": False, "reason": "no SMTP password saved (Setup → Email)"}
+    if not public_mail_host(config["smtp_host"]):
+        return {"sent": False, "reason": "the mail server must be a public host name"}
     message = EmailMessage()
     message["Subject"] = f"Pre-market watchlist {report['session_date']}: " + (
         ", ".join(report["watching"]) or "nothing today"
@@ -660,7 +663,22 @@ def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
             "sent": False,
             "reason": "the mail server refused the message or could not be reached",
         }
-    return {"sent": True, "to": message["To"]}
+    return {"sent": True, "to": secret_store.mask_email(message["To"])}
+
+
+def public_mail_host(host: str) -> bool:
+    """Refuse IP literals and names that resolve to private, loopback or link-local
+    addresses, so a settings change cannot point the mailer at internal services."""
+    import ipaddress
+    import socket
+
+    if not re.fullmatch(r"(?=.{1,253}$)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}", host or ""):
+        return False
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
+    except OSError:
+        return False
+    return bool(addresses) and all(ipaddress.ip_address(item).is_global for item in addresses)
 
 
 def main(argv: list[str] | None = None) -> int:

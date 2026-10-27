@@ -47,6 +47,41 @@ def body_limit(action: str) -> int:
     return MAX_BODY.get(action, DEFAULT_BODY)
 
 
+# Requests allowed per action per minute. Logins and email are tight because each
+# one reaches a third party; everything else is generous for a single owner.
+RATE_PER_MINUTE = {
+    "kite_exchange": 5,
+    "kite_login_url": 10,
+    "send_test_email": 3,
+    "upload_equity_list": 5,
+    "build_universe": 5,
+    "save_secret": 20,
+    "run_job": 10,
+}
+DEFAULT_RATE = 30
+
+
+class RateLimiter:
+    """A sliding one-minute window per key. In memory: the server is one process."""
+
+    def __init__(self, clock=time.monotonic) -> None:
+        self.clock = clock
+        self.hits: dict[str, list[float]] = {}
+        self.lock = threading.Lock()
+
+    def check(self, key: str, per_minute: int) -> float:
+        """Record a hit and return 0, or return the seconds to wait if over the limit."""
+        now = self.clock()
+        with self.lock:
+            recent = [moment for moment in self.hits.get(key, []) if now - moment < 60]
+            if len(recent) >= per_minute:
+                self.hits[key] = recent
+                return max(1.0, 60 - (now - recent[0]))
+            recent.append(now)
+            self.hits[key] = recent
+            return 0.0
+
+
 class SetupApi:
     def __init__(self, data_dir: Path) -> None:
         self.data_dir = data_dir.resolve()
@@ -55,6 +90,7 @@ class SetupApi:
         self.audit_path = self.data_dir / "setup-audit.jsonl"
         self.jobs = job_runner.JobRunner(self.data_dir, self.config)
         self.lock = threading.Lock()
+        self.limiter = RateLimiter()
         self.metrics: dict[str, dict[str, float]] = {}
         self.used_request_tokens: set[str] = set()
 
@@ -272,6 +308,12 @@ class SetupApi:
         handler = getattr(self, "do_" + action, None)
         if handler is None or not action.replace("_", "").isalpha():
             raise ApiError(400, "unknown_action", "Unknown setup action")
+        wait = self.limiter.check(action, RATE_PER_MINUTE.get(action, DEFAULT_RATE))
+        if wait:
+            self.audit(action, "refused", code="rate_limited")
+            raise ApiError(
+                429, "rate_limited", "Too many attempts; wait a minute", retry_after=int(wait)
+            )
         try:
             result = handler(payload)
             self.measure(action, started, True)
@@ -415,6 +457,17 @@ class SetupApi:
         text = payload.get("csv_text")
         if not isinstance(text, str) or not text.strip():
             raise ApiError(422, "invalid", "Choose NSE's EQUITY_L.csv")
+        header = text.lstrip("\ufeff").split("\n", 1)[0].upper()
+        if (
+            not header.startswith("SYMBOL,")
+            or "ISIN NUMBER" not in header
+            or "\x00" in text
+            or any(ord(char) < 32 and char not in "\r\n\t" for char in text)
+            or text.count("\n") > 20_000
+        ):
+            raise ApiError(
+                422, "invalid", "That is not NSE's EQUITY_L.csv (SYMBOL, SERIES, ISIN NUMBER)"
+            )
         with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as tmp:
             tmp.write(text)
         try:

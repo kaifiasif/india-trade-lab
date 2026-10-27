@@ -126,7 +126,15 @@ def values_to_scrub() -> list[str]:
     return [value for value in stored.values() if len(value) >= 6]
 
 
+EMAIL = re.compile(r"([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})")
+
+
+def mask_email(text: str) -> str:
+    """me.name@gmail.com -> m***@gmail.com, so logs show which mailbox without the address."""
+    return EMAIL.sub(r"\1***@\2", text)
+
+
 def scrub(text: str) -> str:
     for value in values_to_scrub():
         text = text.replace(value, "[redacted]")
-    return text
+    return mask_email(text)

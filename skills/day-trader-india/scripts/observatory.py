@@ -500,7 +500,14 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
                 "Content-Security-Policy",
                 "default-src 'self'; style-src 'self'; "
                 "script-src 'self'; img-src 'self' data:; connect-src 'self'; "
-                "frame-ancestors 'none'; base-uri 'none'",
+                "frame-ancestors 'none'; base-uri 'none'; form-action 'self'; "
+                "object-src 'none'",
+            )
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header(
+                "Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()"
             )
             self.end_headers()
             self.wfile.write(body)
@@ -575,6 +582,9 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
             if route.startswith("/api/setup/"):
                 self.setup_post(route.rsplit("/", 1)[1])
                 return
+            if app.setup.limiter.check("replay-control", 30):
+                self.json_response(429, {"error": "rate_limited"}, {"Retry-After": "60"})
+                return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 1024 or self.headers.get("Content-Type") != "application/json":
@@ -618,7 +628,10 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
                 body, headers = app.setup.handle_post(action, payload)
                 self.json_response(200, body, headers)
             except setup_api.ApiError as error:
-                self.json_response(error.status, error.payload())
+                retry = error.extra.get("retry_after")
+                self.json_response(
+                    error.status, error.payload(), {"Retry-After": str(retry)} if retry else None
+                )
             except (OSError, sqlite3.Error):
                 self.json_response(503, {"error": "storage_unavailable"})
 
