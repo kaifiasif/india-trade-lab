@@ -31,6 +31,7 @@ from watchlist import build_watchlist
 import engine
 import india_research
 import paper_book
+import strategies
 
 OPTIONAL_CONFIG = {
     "review_workflow": "intraday",
@@ -52,8 +53,40 @@ OPTIONAL_CONFIG = {
     "reports_dir": "reports",
     "local_base_url": "http://127.0.0.1:11434/v1",
     "local_timeout_seconds": 60,
+    # Reference data (sector, market-cap tier, F&O lot size) and the pre-market report.
+    "reference_db": "reference.sqlite",
+    "min_scored_headlines": 3,
+    "smtp_host": "",
+    "smtp_port": 587,
+    "smtp_user": "",
+    "email_from": "",
+    "email_to": "",
+    # Pre-market selection: hard filters first, then six specialist agents and a judge.
+    "selection": {
+        "agents": True,
+        "pool": 10,
+        "min_specialists": 4,
+        "finalists": 3,
+        "min_market_cap_tier": "large",
+        "max_reference_age_days": 7,
+    },
+    # Market-wide RSS feeds matched to stocks by name; ET Markets by default.
+    "market_feeds": ["https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"],
+    # Paper autopilot: record agent-approved entries and protective exits in the virtual
+    # book each tick. Off by default; entries need a pre-market judge pick unless relaxed.
+    "autopilot": {"enabled": False, "require_premarket_pick": True},
+    # Strategy library. Entries use only strategies the tournament proved after doubled
+    # costs (strategy-scorecard.json); with none proven the desk sits out. Managed exits
+    # move the stop to breakeven, trail it, and time out trades that go nowhere.
+    "strategy": {
+        "require_proven": True,
+        "enabled": list(strategies.STRATEGIES),
+        "max_scorecard_age_days": 7,
+        "managed_exits": True,
+        "filters": True,
+    },
 }
-NESTED_DEFAULTS = ("debate", "memory")
+NESTED_DEFAULTS = ("debate", "memory", "selection", "autopilot", "strategy")
 
 DEFAULT_CONFIG = {
     **OPTIONAL_CONFIG,
@@ -236,6 +269,43 @@ class DailyCoordinator:
             or not 1 <= cfg["memory"]["horizon_sessions"] <= 20
         ):
             raise ValueError("Debate rounds must be 1-3 and the memory window 1-20 sessions")
+        chooser = cfg["selection"]
+        if (
+            type(chooser["agents"]) is not bool
+            or type(chooser["pool"]) is not int
+            or not 1 <= chooser["pool"] <= 15
+            or type(chooser["min_specialists"]) is not int
+            or not 1 <= chooser["min_specialists"] <= 6
+            or type(chooser["finalists"]) is not int
+            or not 1 <= chooser["finalists"] <= 5
+            or chooser["min_market_cap_tier"] not in ("large", "mid", "small")
+            or type(chooser["max_reference_age_days"]) is not int
+            or not 1 <= chooser["max_reference_age_days"] <= 31
+        ):
+            raise ValueError(
+                "Selection needs a pool of 1-15, a quorum of 1-6 specialists, a market-cap "
+                "tier of large/mid/small and a reference age of 1-31 days"
+            )
+        plan = cfg["strategy"]
+        if (
+            type(plan["require_proven"]) is not bool
+            or type(plan["managed_exits"]) is not bool
+            or type(plan["filters"]) is not bool
+            or not isinstance(plan["enabled"], list)
+            or not plan["enabled"]
+            or set(plan["enabled"]) - set(strategies.STRATEGIES)
+            or type(plan["max_scorecard_age_days"]) is not int
+            or not 1 <= plan["max_scorecard_age_days"] <= 31
+        ):
+            raise ValueError(
+                "strategy.enabled must list known strategies ("
+                + ", ".join(strategies.STRATEGIES)
+                + ") and the scorecard age must be 1-31 days"
+            )
+        if any(type(value) is not bool for value in cfg["autopilot"].values()):
+            raise ValueError("Autopilot settings must be true or false")
+        if not isinstance(cfg["market_feeds"], list) or len(cfg["market_feeds"]) > 5:
+            raise ValueError("market_feeds must be a list of at most five feed URLs")
         if cfg.get("version") != 1 or cfg.get("mode") != "paper_research":
             raise ValueError("Only version-1 paper_research configuration is supported")
         for key in DEFAULT_CONFIG:
@@ -371,9 +441,16 @@ class DailyCoordinator:
                 sessions = read_json(self.path("sessions"))
                 quotes = read_json(self.path("quotes"))
                 # Existing-position exit proposals do not depend on entry-only research inputs.
+                # Current bars, when readable, let managed exits trail the stop.
+                try:
+                    exit_bars = india_research.bars_from_csv(self.path("bars"))
+                except (ValueError, OSError, KeyError):
+                    exit_bars = []
                 for symbol in book["positions"]:
                     report["calls"].append(
-                        self.evaluate(symbol, book, history, sessions, [], quotes, {}, {}, run_id)
+                        self.evaluate(
+                            symbol, book, history, sessions, exit_bars, quotes, {}, {}, run_id
+                        )
                     )
                 try:
                     if not allow_entries:
@@ -507,6 +584,39 @@ class DailyCoordinator:
         finally:
             self.store.release(self.owner)
 
+    def playbook(self, symbol: str, now: dt.datetime) -> dict:
+        """Strategies this symbol may trade today: proven ones, narrowed by the judge."""
+        return strategies.allowed_for(
+            self.config_path.parent,
+            self.config["strategy"],
+            symbol,
+            str(now.astimezone(engine.IST).date()),
+            self.path("reports_dir"),
+        )
+
+    def managed_exit(
+        self, symbol: str, held: dict, book: dict, bars: list, now: dt.datetime
+    ) -> dict:
+        """Breakeven, trailing and time stops from the bars completed since entry."""
+        initial = float(held["stop_inr"])
+        if not self.config["strategy"]["managed_exits"]:
+            return {"stop": initial, "rule": "initial", "time_stop": False}
+        entry_event = next(
+            (event for event in book["events"] if event["id"] == held["entry_event_id"]), None
+        )
+        if entry_event is None:
+            return {"stop": initial, "rule": "initial", "time_stop": False}
+        entered = paper_book.timestamp(entry_event["as_of"])
+        since = [
+            row
+            for row in bars
+            if row["symbol"] == symbol and row["t"] >= entered and row["t"] + engine.BAR <= now
+        ]
+        per_share = (float(held["entry_fee_inr"]) + float(held["exit_fee_reserve_inr"])) / held[
+            "qty"
+        ]
+        return strategies.managed_stop(float(held["entry_inr"]), initial, per_share, since)
+
     def benchmark(self) -> dict | None:
         path = self.path("benchmark_observations")
         return read_json(path) if path.is_file() else None
@@ -582,15 +692,23 @@ class DailyCoordinator:
             session = india_research.session(manifest, now.date())
             held = book["positions"].get(symbol)
             if held:
+                managed = self.managed_exit(symbol, held, book, bars, now)
+                stop_level = max(Decimal(held["stop_inr"]), Decimal(str(managed["stop"])))
                 reason = (
-                    "stop"
-                    if quote.bid <= Decimal(held["stop_inr"])
+                    ("stop" if managed["rule"] == "initial" else managed["rule"] + "_stop")
+                    if quote.bid <= stop_level
                     else "target"
                     if held.get("target_inr") and quote.bid >= Decimal(held["target_inr"])
                     else "square_off"
                     if now >= session["flat_by"]
+                    else "time_stop"
+                    if managed["time_stop"]
                     else None
                 )
+                result["managed_exit"] = {
+                    key: (str(value) if isinstance(value, Decimal) else value)
+                    for key, value in managed.items()
+                }
                 if reason:
                     proposal = {
                         "symbol": symbol,
@@ -624,7 +742,8 @@ class DailyCoordinator:
                     result.update(
                         decision="HOLD_PAPER",
                         reasons=[
-                            "No stop or time exit observed; this coordinator does not execute exits"
+                            f"Holding: protective stop INR {stop_level} ({managed['rule']}), "
+                            "no target, square-off or time stop reached"
                         ],
                     )
                 return result
@@ -634,10 +753,26 @@ class DailyCoordinator:
             rows, session = india_research.checked_session(
                 [row for row in bars if row["symbol"] == symbol], manifest, now.date(), now
             )
-            signal = india_research.first_signal(rows, session)
-            if signal is None or signal["confirmed_at"] != (rows[-1]["t"] + engine.BAR).isoformat():
+            playbook = self.playbook(symbol, now)
+            if not playbook["allowed"]:
+                result.update(decision="WAIT", reasons=["No proven strategy: " + playbook["basis"]])
+                return result
+            try:
+                snapshot = technical.snapshot(technical.daily_bars(history, symbol, now))
+            except (ValueError, KeyError, TypeError, sqlite3.Error):
+                snapshot = None
+            signal = strategies.latest_signal(
+                rows,
+                session,
+                playbook["allowed"],
+                snapshot if self.config["strategy"]["filters"] else None,
+            )
+            if signal is None or "blocked" in signal:
                 result.update(
-                    decision="WAIT", reasons=["No new completed-bar breakout on the latest candle"]
+                    decision="WAIT",
+                    reasons=(signal or {}).get("blocked")
+                    or ["No allowed setup on the latest completed bar"],
+                    playbook=playbook,
                 )
                 return result
             strategy = engine.OpeningRangeBreakout(
@@ -645,7 +780,7 @@ class DailyCoordinator:
                 Decimal(book["limits"]["position_limit"]),
                 Decimal(self.config["target_r"]),
             )
-            stop = Decimal(str(signal["range_low"]))
+            stop = Decimal(str(signal["stop"]))
             qty = strategy.size(quote.ask, stop, settings)
             if qty <= 0:
                 raise ValueError("No whole-share quantity fits planned risk and cost limits")
@@ -667,9 +802,12 @@ class DailyCoordinator:
                 "book_state_sha256": book["state_sha256"],
                 "pretrade_sha256": agent_workflow.proposal_digest(pretrade[symbol]),
                 "quote_bid_inr": str(quote.bid),
-                "strategy_version": "intraday-orb-v1",
-                "patterns": ["OPENING_RANGE_BREAKOUT"]
-                + self.screen_context.get(symbol, {}).get("features", {}).get("patterns", []),
+                "strategy_version": signal["version"],
+                "setup": signal["reason"],
+                "patterns": (
+                    [signal["version"].upper().replace("-", "_")]
+                    + self.screen_context.get(symbol, {}).get("features", {}).get("patterns", [])
+                )[:10],
             }
             # Validate the exact proposed transition on a pure copy; never persist a fill here.
             paper_book.fill(
@@ -712,12 +850,8 @@ class DailyCoordinator:
                     and guardrails.evidence_time(item["published_at"]) > now
                 ):
                     raise ValueError("Research publication is from the future")
-            try:
-                snapshot = technical.snapshot(technical.daily_bars(history, symbol, now))
-                if "technical-snapshot" not in ids:
-                    supplied = [*supplied, technical.evidence_item(symbol, snapshot)]
-            except (ValueError, KeyError, TypeError, sqlite3.Error):
-                snapshot = None
+            if snapshot is not None and "technical-snapshot" not in ids:
+                supplied = [*supplied, technical.evidence_item(symbol, snapshot)]
             context = {
                 "technical": snapshot,
                 "past_lessons": self.memory.lessons(symbol, now) if self.memory else [],

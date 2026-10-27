@@ -43,6 +43,21 @@ DEBATE_ROLES = {
     "reflector": "deep",
 }
 
+# Pre-market selection roles. Specialists assess one domain each; the judge makes the call.
+SELECTION_ROLES = {
+    "news-analyst": "quick",
+    "sentiment-analyst": "quick",
+    "technical-analyst": "quick",
+    "sector-analyst": "quick",
+    "liquidity-analyst": "quick",
+    "brokerage-analyst": "quick",
+    # Sub-agents the judge spawns for each finalist before its final call.
+    "risk-scout": "quick",
+    "setup-planner": "quick",
+    "selection-judge": "deep",
+}
+MODEL_ROLES = {**DEBATE_ROLES, **SELECTION_ROLES}
+
 
 def review_prompt(role: str, context: dict, reports: list[dict]) -> tuple[str, str]:
     if role not in ROLE_PURPOSES:

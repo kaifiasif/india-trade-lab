@@ -265,7 +265,12 @@ def build_project(directory: Path, now: dt.datetime, breakout: bool = True) -> P
         conn.execute("CREATE TABLE book (id INTEGER PRIMARY KEY, data TEXT)")
         conn.execute("INSERT INTO book VALUES (1,?)", (json.dumps(book),))
     config = directory / "pipeline.json"
-    config.write_text(json.dumps(dict(DEFAULT_CONFIG)))
+    # A flat fixture series; the daily filters are tested on their own.
+    settings = {**DEFAULT_CONFIG, "strategy": {**DEFAULT_CONFIG["strategy"], "filters": False}}
+    config.write_text(json.dumps(settings))
+    from test_decision_pipeline import prove
+
+    prove(directory, now)
     return config
 
 
@@ -357,7 +362,7 @@ class PretradeTests(unittest.TestCase):
             {"surveillance_clear": "s", "no_material_event": "e"}, self.now,
         )  # fmt: skip
         refused = pretrade.build(config, None, self.now)["refused"]["NSE:INFY"]
-        self.assertIn("breakout", refused)
+        self.assertIn("setup on the latest completed bar", refused)
 
 
 class PreflightTests(unittest.TestCase):

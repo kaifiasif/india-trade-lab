@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 
 from agent_runtime import (
-    DEBATE_ROLES,
+    MODEL_ROLES,
     REPORT_SCHEMA,
     ROLE_PURPOSES,
     OfflineReviewer,
@@ -253,14 +253,14 @@ class RoutedReviewer:
     name = "routed_research_models"
     uses_network = True
     QUICK_ROLES = {"india-data", "india-news", "india-screener", "india-sentiment"} | {
-        role for role, tier in DEBATE_ROLES.items() if tier == "quick"
+        role for role, tier in MODEL_ROLES.items() if tier == "quick"
     }
 
     def __init__(self, config: dict) -> None:
         self.routes = {}
         provider = config["model_provider"]
         overrides = config.get("model_routes", {})
-        known = set(ROLE_PURPOSES) | set(DEBATE_ROLES)
+        known = set(ROLE_PURPOSES) | set(MODEL_ROLES)
         if not isinstance(overrides, dict) or set(overrides) - known:
             raise ValueError("Unknown model routing role")
         for role in sorted(known):
@@ -318,8 +318,8 @@ class RoutedReviewer:
         return self.client(role).review(role, context, reports)
 
     def argue(self, role: str, system: str, user: str, schema: dict) -> dict:
-        if role not in DEBATE_ROLES:
-            raise ValueError("Unknown debate role")
+        if role not in MODEL_ROLES:
+            raise ValueError("Unknown model role")
         return self.client(role).structured(system, user, schema, role.replace("-", "_"))
 
 

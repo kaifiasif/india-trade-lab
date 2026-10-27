@@ -20,6 +20,19 @@ from test_watchlist import master
 import paper_book
 
 
+def prove(directory: Path, now: dt.datetime, eligible=("orb-v1", "vwap-pullback-v1")) -> None:
+    """Offline stand-in for a tournament scorecard, so entry tests exercise the gates."""
+    (directory / "strategy-scorecard.json").write_text(
+        json.dumps(
+            {
+                "as_of": now.isoformat(),
+                "strategies": {name: {"eligible": True} for name in eligible},
+                "notice": "OFFLINE TEST SCORECARD",
+            }
+        )
+    )
+
+
 def setup(directory: Path):
     bars, sessions, dates = fixtures(directory)
     today = dates[-1] + dt.timedelta(days=1)
@@ -34,7 +47,8 @@ def setup(directory: Path):
         "flat_by": "15:15",
     }
     sessions.write_text(json.dumps(manifest))
-    config = {**DEFAULT_CONFIG}
+    # The fixture series only rises (RSI 100), so the daily filters are tested separately.
+    config = {**DEFAULT_CONFIG, "strategy": {**DEFAULT_CONFIG["strategy"], "filters": False}}
     config_path = directory / "pipeline.json"
     config_path.write_text(json.dumps(config))
     (directory / "universe.json").write_text(json.dumps(master(now)))
@@ -83,6 +97,7 @@ def setup(directory: Path):
     with sqlite3.connect(directory / "paper.sqlite") as conn:
         conn.execute("CREATE TABLE book (id INTEGER PRIMARY KEY, data TEXT)")
         conn.execute("INSERT INTO book VALUES (1,?)", (json.dumps(book),))
+    prove(directory, now)
     return DailyCoordinator(config_path, reviewer=FixtureReviewer(), now=lambda: now), now
 
 

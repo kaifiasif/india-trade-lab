@@ -102,6 +102,79 @@ def research_state(directory: Path) -> dict:
     return result
 
 
+def desk_state(directory: Path) -> dict[str, Any]:
+    """Today's desk: the latest pre-market selection and the strategy scorecard, read only."""
+    result: dict[str, Any] = {"report": None, "scorecard": None}
+    reports = directory / "reports"
+    try:
+        config = json.loads((directory / "pipeline.json").read_text(encoding="utf-8"))
+        folder = config.get("reports_dir")
+        if isinstance(folder, str) and folder and "://" not in folder:
+            reports = (directory / folder).resolve()
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        latest = max(reports.glob("premarket-*.json"), key=lambda item: item.name, default=None)
+        if latest is not None and latest.stat().st_size <= 5_000_000:
+            report = json.loads(latest.read_text(encoding="utf-8"))
+            selection = report.get("selection") or {}
+            judge = selection.get("judge") or {}
+            finalists = selection.get("finalists") or {}
+            result["report"] = {
+                "session_date": report.get("session_date"),
+                "as_of": report.get("as_of"),
+                "mode": selection.get("mode"),
+                "reason": selection.get("reason"),
+                "summary": judge.get("summary"),
+                "watching": report.get("watching") or [],
+                "picks": [
+                    {
+                        key: pick.get(key)
+                        for key in ("symbol", "rating", "conviction", "strategy", "reason")
+                    }
+                    | {
+                        "risk": (
+                            (finalists.get(pick.get("symbol")) or {}).get("risk-scout") or {}
+                        ).get("risk_level")
+                    }
+                    for pick in judge.get("picks") or []
+                ],
+                "dropped": [
+                    {"symbol": item.get("symbol"), "why": item.get("dropped")}
+                    for item in judge.get("dropped") or []
+                ],
+                "specialists": {
+                    role: view.get("status")
+                    for role, view in (selection.get("specialists") or {}).items()
+                },
+                "strategies": list((selection.get("strategies") or {}).keys()),
+                "assessed": len(report.get("candidates") or []),
+                "pool": len(selection.get("pool") or []),
+            }
+    except (OSError, ValueError, TypeError, AttributeError):
+        result["report"] = None
+    try:
+        card = json.loads((directory / "strategy-scorecard.json").read_text(encoding="utf-8"))
+        result["scorecard"] = {
+            "as_of": card.get("as_of"),
+            "sessions": card.get("sessions"),
+            "strategies": {
+                name: {
+                    "eligible": bool(item.get("eligible")),
+                    "reason": (item.get("reasons") or [""])[0],
+                    "doubled_costs": {
+                        key: (item.get("doubled_costs") or {}).get(key)
+                        for key in ("trades", "net_inr", "profit_factor")
+                    },
+                }
+                for name, item in (card.get("strategies") or {}).items()
+            },
+        }
+    except (OSError, ValueError, TypeError, AttributeError):
+        result["scorecard"] = None
+    return result
+
+
 def read_run(path: Path) -> tuple[dict, dict | None, list[dict]]:
     """Read a consistent view without taking ownership of the engine's write version."""
     with sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5) as conn:
@@ -294,6 +367,7 @@ class Observatory:
                     "prices": [],
                     "positions": {},
                     "research": research_state(self.directory),
+                    "desk": desk_state(self.directory),
                 }
             result = project_state(self.current, self.status)
             result["watchlist"] = self.watchlist()
@@ -301,6 +375,7 @@ class Observatory:
             result["history"] = self.history.coverage("NSE:DEMO", dt.datetime.now(dt.timezone.utc))
             result["error"] = self.error
             result["research"] = research_state(self.directory)
+            result["desk"] = desk_state(self.directory)
             return result
 
     def start(self, scenario: str) -> str:

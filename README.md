@@ -1,101 +1,85 @@
 # India Trade Lab
 
-Indian cash-equity research and paper-trading tools, with a coordinator and fifteen specialist AI roles. Built for NSE/BSE, INR and Asia/Kolkata.
+**An AI research desk for NSE stocks that trades a virtual book, and sits out when nothing has earned the right to trade.**
 
-**Paper first. No live order execution. No promise of loss-free trading.**
+Every morning, six specialist agents read the news, sentiment, charts, sectors, liquidity and broker calls for your stocks. A judge agent, helped by a risk scout and a setup planner, picks up to three to watch. All session, proven strategies trade them in a paper book under hard loss limits. Every evening, a tournament re-tests each strategy at double costs on your own history.
 
-Start with [skill installation](docs/installation.md) for Claude, Codex and other agents,
-or use the Python CLI below.
+Paper only: there is no real-order path. No result here is a promise of profit.
 
-## What works
+![The India Trade Lab dashboard](docs/images/dashboard.png)
 
-- Read-only historical five-minute candle downloads from Zerodha Kite and Upstox, using privately configured broker sessions.
-- Completed-bar opening-range breakout observations with explicit date-specific exchange sessions.
-- Historical single-symbol replay with estimated charges, slippage, adverse stop gaps, conservative ambiguous-bar handling and doubled-cost stress.
-- Point-in-time fundamental screening with source/publication dates and rejection of missing, stale or future information.
-- A local virtual-INR journal with cash, position and planned-risk limits; daily entry/open-position caps; loss-streak/drawdown stops; pause; stale-quote and duplicate-event rejection.
-- A deterministic paper session engine with a risk gate, automatic stop/target/square-off exits, stale-feed halt, reconciliation and restart recovery. See [engine reference](skills/day-trader-india/references/engine.md).
-- A local browser dashboard with a 3D decision funnel, mascot, recorded calls, replay controls and persistent history coverage.
-- Dated research shortlists from a sourced active-EQ universe, complete history and prior traded-value checks; current setups still need confirmation.
-- Fifty-session historical coverage checks for forward engine entries; synthetic history never satisfies that gate.
-- Fourteen portable skills, optional native Claude/Codex specialist profiles, synthetic examples and offline regression tests.
-- A persistent daily research coordinator with six evidence-bound model roles, vetoes, frozen paper proposals, audit events and a reporting-only ₹80,000 goal.
-- Bull/bear and risk **debates** over the frozen ticket, ending in a five-tier rating that can only stop or downgrade an entry. See [debate.md](skills/day-trader-india/references/debate.md).
-- **Decision memory**: every rated call is settled on later stored prices and becomes a point-in-time lesson for later debates, with a hit-rate and alpha scorecard.
-- A **backtest grid** over stored sessions with a doubled-cost stress run, per-symbol, per-month and first/second-half results. See [backtest.md](skills/day-trader-india/references/backtest.md).
-- A **preflight check** that names every missing input and its fix, plus collectors for dated news evidence and the machine-checkable pre-trade checks.
-- A session router for India/US timezones and optional continuous read-only Binance spot collection. See [daily service setup](skills/day-trader-india/references/daily-service.md).
+**Who it is for:** Indian retail traders and developers who want to test an AI-assisted intraday process honestly, with real Zerodha data, before risking money.
 
-The supplied opening-range rule is a test harness, not a proven trading strategy. A passing test verifies software behaviour, not investment performance.
-
-## What is not running
-
-The research worker must be explicitly configured and started. It can poll mapped broker quotes/current candles and collect public crypto data; it produces proposals, not automatic paper fills. There is no live quote stream, real broker order path, US trading adapter, crypto ledger, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
-
-The broker adapters are implemented but require an authorised account session, appropriate data entitlement and a verified symbol/instrument mapping. No account is connected by cloning this repository. Authenticated broker access has not been integration-tested in this project.
-
-## Expanded research lab
-
-[Run the research lab](skills/day-trader-india/references/research-lab.md) for
-Nifty-relative ranking, daily technical patterns, ten-role bull/bear reviews,
-OpenAI/Anthropic/Gemini routing, fresh checkpoint recovery and paper P&L with
-matched-window benchmark comparisons. The source comparison records the
-upstream ideas and the features that remain outside this implementation.
-
-## Requirements
-
-- Python 3.10 or newer. Tools use the Python standard library; no pip packages are required.
-- For actual broker data: authorised credentials in environment variables, the required data plan and a verified cash-equity instrument master.
-- A date-specific exchange session manifest. Unknown dates are blocked; the tools do not assume every weekday is a trading day.
-
-## Quick start
+## Try it in 2 minutes (no account needed)
 
 ```bash
-git clone https://github.com/kaifiasif/india-trade-lab.git
-cd india-trade-lab
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-python scripts/check.py
+git clone https://github.com/kaifiasif/india-trade-lab.git && cd india-trade-lab
+python3 scripts/observatory.py          # then open http://127.0.0.1:8765 and press "Run paper replay"
 ```
 
-### Open the paper observatory
+Needs Python 3.10 or newer and nothing else. The replay uses a bundled synthetic session.
 
-From the repository root, run:
+To see what the morning report looks like, open
+`docs/examples/premarket-sample.html` in a browser after cloning: fictional stocks and rule-based
+stand-in agents, clearly labelled. Meet every agent in the illustrated
+[Meet the Desk guide](docs/guide/agents-guide.pdf).
+
+[![A synthetic sample pre-market report](docs/images/premarket-sample.png)](docs/examples/premarket-sample.html)
+
+## How a trading day works
+
+| When (IST) | What happens | Who decides |
+|---|---|---|
+| 16:10 the evening before | History sync, then the strategy tournament at double costs | Code |
+| 08:30 | You log in to Kite (2FA) and confirm two human checks | You |
+| 08:40 | Hard filters, six specialists, the judge and its sub-agents; report emailed | Agents narrow, code filters |
+| 09:15–15:15 | Live setups on judge picks are reviewed, debated and recorded in the paper book | Agents can only veto; code sizes |
+| All session | Breakeven, trailing and time stops; 15:15 square-off | Code |
+| Fridays | The week's paper track record is written, ready to publish | Code |
+
+Day to day, one command covers it (`alias itl="python3 scripts/itl.py"`):
 
 ```bash
-python3 scripts/observatory.py
+itl setup        # create the private project folder
+itl login        # daily Kite login and the two human checks
+itl report       # news, then the pre-market report (add --email)
+itl tournament   # re-test the strategies on stored history
+itl status       # what is ready, today's picks, the tournament, the book
+itl track        # the paper track record as Markdown
+itl dashboard    # the local dashboard, including Today's desk
 ```
 
-Open `http://127.0.0.1:8765`. Choose **Run paper replay** to watch the engine
-process the bundled synthetic session. Select a funnel stage or call to inspect
-its recorded inputs, result and explanation. The UI polls the local API every
-second. Pause controls replay time; a sticky entry halt still permits paper exits.
+## What to expect in week 1
 
-The dashboard has no exchange connection or live-order controls. Its five active
-stages are deterministic Python rules. Research skills that were not invoked are
-shown as idle. An exported hosted preview displays archived synthetic events;
-run the local backend for working replay controls.
+- **Costs:** Kite Connect is ₹500 a month for market data. Hosting on Oracle Cloud Always Free is ₹0. The agents cost ₹0 on Gemini's free tier, or roughly ₹130 a month with Claude (13 calls each morning, plus intraday reviews you cap with `max_model_calls_per_day`).
+- **Setup:** about an hour once: a Kite app, 180 days of history, a Gmail app password. Follow [deploy on Oracle Cloud](docs/deploy-oracle.md), or [live data setup](docs/live-data.md) to run on your own computer.
+- **Daily effort:** about two minutes each morning for the Kite login and the two checks.
+- **First results:** the tournament may find that no strategy has earned money at double costs on your history yet. Then the desk **sits out** and records no trades. That is the safe outcome, not a fault. To collect paper trades anyway, set `"strategy": {"require_proven": false}`, for paper only.
+- **Judge picks:** need a model key. Without one, the report uses the plain score ranking and says so.
 
-The daily research desk also reads persisted model handoffs, proposals, worker
-sessions and crypto observations when configured. These records are separate
-from synthetic replay fills. No model activity is fabricated for the preview.
+## What it does
 
-The funnel and the session tape render in 3D with a bundled copy of Three.js
-(no CDN), and fall back to the flat view without WebGL. The optional
-[recap video](recap-video/README.md) renders a recorded session to MP4 with Remotion.
+- **Pre-market report:** trend, RSI, sector moves, market-cap tier, liquidity, F&O lot size (shown, never traded), headline sentiment and broker calls per stock, from Google News, NSE filings and ET Markets. See [premarket.md](skills/day-trader-india/references/premarket.md).
+- **Agents:** six specialists, a judge, and two sub-agents per finalist. Picks must name a proven strategy; code drops high-risk or setup-less picks.
+- **Strategies:** an opening-range breakout and a VWAP pullback, behind trend, RSI and stop-distance filters, with breakeven, trailing and time stops. See [strategy.md](skills/day-trader-india/references/strategy.md).
+- **Tournament:** replays each strategy on your history with pessimistic fills; only those profitable at double costs across periods may trade.
+- **Intraday review:** six evidence roles, bull/bear and risk debates, a five-tier rating that can only stop or downgrade an entry, and decision memory. See [debate.md](skills/day-trader-india/references/debate.md).
+- **Paper journal and engine:** cash, risk, daily-loss, trade-count, streak and drawdown limits; stale-quote rejection; checksummed state; restart recovery. See [engine.md](skills/day-trader-india/references/engine.md).
+- **Paper autopilot:** records approved entries and every exit in the virtual book, all session (opt in).
+- **Dashboard:** a 3D decision funnel, Today's desk, session tape, calls, research and risk panels.
+- **Backtests and checks:** a backtest grid with doubled costs ([backtest.md](skills/day-trader-india/references/backtest.md)), a preflight check that names every missing input and its fix, and 213 offline tests.
+- **Portable skills:** 17 skills (the trading desk, a developer skill and 15 specialist roles) for Claude, Codex and other agents.
 
-To paper trade on live Kite quotes and candles, follow [live data setup](docs/live-data.md).
-Before trusting any run, check the setup:
+## What it does not do
 
-```bash
-python3 scripts/preflight.py --config data/observatory/pipeline.json
-```
+- **Place real orders.** There is no broker order path. Real trading would need new code, a SEBI-registered static IP and your explicit decision.
+- **Stream quotes.** The worker polls Kite quotes and candles each minute; there is no WebSocket feed.
+- **Refresh the Kite login, the NSE calendar or the stock list for you.** Kite needs a daily 2FA login; the calendar and stock list are updated by hand (yearly and monthly).
+- **Prove a strategy works.** A passing test checks software behaviour, not profitability. Past sessions do not predict future returns.
 
-It reports each prerequisite separately — calendar, universe, history, book,
-feeds, evidence, models, credentials — with the exact command that fixes it.
+Broker adapters need an authorised account, the data plan and a verified instrument mapping. Authenticated broker access has been built to the documented APIs but not integration-tested by this project.
 
-### Compared with general multi-agent trading frameworks
+## Compared with general multi-agent trading frameworks
 
 This project deliberately differs from frameworks where a model decides the
 trade:
@@ -114,6 +98,8 @@ not make the strategy profitable, and no result here is evidence that it is.
 
 Books and event logs live under `data/observatory/` and are retained between runs.
 Historical coverage and import instructions are in [the observatory guide](docs/observatory.md).
+
+## Command-line examples
 
 ### Run the made-up example
 
@@ -206,7 +192,7 @@ python3 scripts/install_skills.py --platform codex --scope user --with-agents
 ```
 
 These are alternatives; run the one for your client, or both if you use both.
-The default installs all seventeen skills. `--with-agents` also installs fifteen native specialist profiles for that client. Existing files are never replaced.
+The default installs all 17 skills. `--with-agents` also installs 15 native specialist profiles for that client. Existing files are never replaced.
 Use `/day-trader-india` in Claude Code or `$day-trader-india` in Codex.
 
 For **Claude web / Desktop**, run `python3 scripts/package_skills.py` and upload
@@ -268,20 +254,18 @@ GitHub Actions uses the same command on Python 3.10 and 3.12 and uploads skill
 ZIPs as a workflow artifact. Public function annotations support readability;
 full static type checking is not enforced yet.
 
-## Automation roadmap
+## Roadmap
 
-These additions are planned, **not implemented**:
+Planned, **not implemented**:
 
-1. Persistent market-hours runner with session-aware start/stop and duplicate-signal handling.
-2. Broker current-price/stream adapter, reconnect logic and fresh bid/ask recording.
-3. Isolated paper execution service with simulated stops, targets, time exits and restarts.
-4. Current instrument/calendar, surveillance/event and broker-specific cost updates.
-5. Mark-to-market portfolio controls, operational monitoring and end-of-session reports.
-
-GitHub stores and versions the code. Continuous intraday monitoring requires a running process with persistent storage and broker authorisation. AI can explain results; deterministic code should apply risk limits and virtual execution rules.
+1. A WebSocket quote stream with reconnect handling, replacing the one-minute poll.
+2. Upstox live quotes and stock lists, for a ₹0 data option.
+3. Mark-to-market portfolio controls and drawdown on open positions.
+4. Automatic NSE calendar and instrument-master updates.
 
 ## References
 
+- [Research lab: relative strength, patterns and model routing](skills/day-trader-india/references/research-lab.md)
 - [Risk process and limitations](skills/day-trader-india/references/risk-process.md)
 - [Data and CLI schemas](skills/day-trader-india/references/data-and-tools.md)
 - [Broker connections and sandbox distinctions](skills/day-trader-india/references/connections.md)

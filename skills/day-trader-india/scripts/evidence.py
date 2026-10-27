@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Collect dated news and exchange announcements into research-evidence.json.
 
+Per-stock Google News searches and NSE announcements are joined by market-wide
+RSS feeds (ET Markets by default), whose headlines are matched to a stock by its
+company name or symbol.
+
 Headlines and filing titles are collected verbatim with their publication time
 and a link, so a reviewer can open the source. Nothing is summarised, scored or
 treated as fact: items are untrusted data that the review roles weigh, and an
@@ -15,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import email.utils
 import html
 import json
 import re
@@ -34,11 +39,14 @@ NSE_ANNOUNCEMENTS = "https://www.nseindia.com/api/corporate-announcements"
 MAX_BYTES = 3_000_000
 MAX_ITEMS = 15
 MAX_FACTS = 600
+MAX_FEED_ITEMS = 200
+FEED_HOSTS = frozenset({"economictimes.indiatimes.com"})
+NAME_SUFFIXES = re.compile(r"\b(limited|ltd\.?|india|the)\b", re.IGNORECASE)
 
 
 def _get(url: str, params: dict, headers: dict, timeout: int = 20) -> bytes:
     request = urllib.request.Request(
-        url + "?" + urllib.parse.urlencode(params),
+        url + ("?" + urllib.parse.urlencode(params) if params else ""),
         headers={"Accept": "*/*", **headers},
         method="GET",
     )
@@ -133,6 +141,52 @@ def parse_announcements(raw: bytes, cutoff: dt.datetime, limit: int = MAX_ITEMS)
     return items[:limit]
 
 
+def feed_url(value: object) -> str:
+    """A market feed must be https on an allowlisted host; anything else is refused."""
+    parts = urllib.parse.urlsplit(value if isinstance(value, str) else "")
+    if parts.scheme != "https" or parts.hostname not in FEED_HOSTS or parts.username:
+        raise ValueError("market feeds must be https URLs on " + ", ".join(sorted(FEED_HOSTS)))
+    return str(value)
+
+
+def parse_feed(raw: bytes, cutoff: dt.datetime, limit: int = MAX_FEED_ITEMS) -> list[dict]:
+    """Parse a market-wide RSS feed (RFC 822 dates with offsets) into dated items."""
+    try:
+        root = ElementTree.fromstring(raw)
+    except ElementTree.ParseError:
+        raise ValueError("market feed is not valid XML") from None
+    items = []
+    for node in root.iterfind(".//item"):
+        title = _clean(node.findtext("title", ""))
+        try:
+            stamp = email.utils.parsedate_to_datetime(node.findtext("pubDate", ""))
+        except (TypeError, ValueError, IndexError):
+            continue
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=dt.timezone.utc)
+        if not title or stamp > cutoff:
+            continue
+        items.append(
+            {
+                "published_at": stamp.astimezone(IST).isoformat(),
+                "title": title[:MAX_FACTS],
+                "link": _clean(node.findtext("link", ""))[:500],
+            }
+        )
+    items.sort(key=lambda item: item["published_at"], reverse=True)
+    return items[:limit]
+
+
+def mentions(item: dict, company: str, symbol: str) -> bool:
+    """True when a headline names the company (without Ltd/Limited) or its symbol as a word."""
+    text = " " + " ".join(re.sub(r"[^a-z0-9&]+", " ", item["title"].lower()).split()) + " "
+    stem = " ".join(re.sub(r"[^a-z0-9&]+", " ", NAME_SUFFIXES.sub(" ", company.lower())).split())
+    plain = symbol.split(":")[-1].lower()
+    return bool(
+        (len(stem) >= 4 and f" {stem} " in text) or (len(plain) >= 3 and f" {plain} " in text)
+    )
+
+
 def collect_symbol(
     symbol: str,
     company: str,
@@ -167,6 +221,8 @@ def collect_symbol(
                         f"— {item['outlet']}, published {item['published_at']}."
                     ),
                     "kind": "news_headline",
+                    "title": item["title"],
+                    "outlet": item["outlet"],
                 }
             )
     except ValueError as exc:
@@ -191,6 +247,8 @@ def collect_symbol(
                         "published_at": item["published_at"],
                         "facts": f"Exchange announcement subject: {item['title']}",
                         "kind": "exchange_filing",
+                        "title": item["title"],
+                        "outlet": item["outlet"],
                     }
                 )
         except ValueError as exc:
@@ -221,9 +279,32 @@ def collect(config_path: Path, cutoff: dt.datetime | None = None, fetch=_get) ->
     payload: dict[str, list[dict]] = {}
     notes: list[str] = []
     kept: list[str] = []
+    market: list[tuple[str, dict]] = []
+    for value in coordinator.config.get("market_feeds", []):
+        try:
+            url = feed_url(value)
+            market += [(url, item) for item in parse_feed(fetch(url, {}, {}), clock)]
+        except ValueError as exc:
+            notes.append(f"market feed unavailable ({exc})")
     for instrument in universe.get("instruments", [])[:10]:
         symbol = instrument.get("symbol", "")
-        items, symbol_notes, read = collect_symbol(symbol, instrument.get("name", ""), clock, fetch)
+        company = instrument.get("name", "")
+        items, symbol_notes, read = collect_symbol(symbol, company, clock, fetch)
+        plain = symbol.split(":")[-1]
+        matched = [(url, item) for url, item in market if mentions(item, company, symbol)]
+        for index, (url, item) in enumerate(matched[:MAX_ITEMS], 1):
+            items.append(
+                {
+                    "id": f"market-{plain}-{index}",
+                    "source": f"Market RSS feed {url}: {item['link']}",
+                    "observed_at": clock.isoformat(),
+                    "published_at": item["published_at"],
+                    "facts": f"Market headline (unverified, not read in full): {item['title']}",
+                    "kind": "market_headline",
+                    "title": item["title"],
+                    "outlet": "ET Markets" if "economictimes" in url else "market feed",
+                }
+            )
         notes.extend(symbol_notes)
         if items:
             payload[symbol] = items
