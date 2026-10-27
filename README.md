@@ -23,6 +23,7 @@ or use the Python CLI below.
 - Bull/bear and risk **debates** over the frozen ticket, ending in a five-tier rating that can only stop or downgrade an entry. See [debate.md](skills/day-trader-india/references/debate.md).
 - **Decision memory**: every rated call is settled on later stored prices and becomes a point-in-time lesson for later debates, with a hit-rate and alpha scorecard.
 - A **backtest grid** over stored sessions with a doubled-cost stress run, per-symbol, per-month and first/second-half results. See [backtest.md](skills/day-trader-india/references/backtest.md).
+- A **pre-market report**, emailed if you configure Gmail: trend, RSI, sector moves, market-cap tier, liquidity, F&O lot size, headline sentiment and broker calls per stock. Six specialist agents assess the filtered pool and a **selection judge** makes the final call. See [premarket.md](skills/day-trader-india/references/premarket.md).
 - A **preflight check** that names every missing input and its fix, plus collectors for dated news evidence and the machine-checkable pre-trade checks.
 - A session router for India/US timezones and optional continuous read-only Binance spot collection. See [daily service setup](skills/day-trader-india/references/daily-service.md).
 

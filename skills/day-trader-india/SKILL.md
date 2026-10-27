@@ -197,6 +197,15 @@ engine across stored sessions with a doubled-cost stress run. Read
 [debate.md](references/debate.md) and [backtest.md](references/backtest.md).
 A rating can only stop or downgrade a ticket; code still sizes every position.
 
+## Pre-market report and selection judge
+
+`scripts/premarket.py` builds the morning watchlist. Hard filters (history,
+liquidity, minimum NSE market-cap tier) form the pool; six specialist agents
+(news, sentiment, technical, sector, liquidity, brokerage) assess it; the
+selection judge makes the final call. Without a model it uses the deterministic
+rank and says so. F&O lots are shown; only cash equity is traded. Read
+[premarket.md](references/premarket.md).
+
 ## Check the setup before trusting a run
 
 `scripts/preflight.py` checks each prerequisite separately and names the exact

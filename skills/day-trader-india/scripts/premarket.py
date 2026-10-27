@@ -8,9 +8,16 @@ and lot size, collected headlines with their sentiment, and any broker call a
 headline states. Each candidate is then ranked by a transparent score whose every
 component is shown with the reason it was awarded.
 
-This is a watchlist, not a trade list and not a forecast. A high rank means the
-instrument met liquidity, size and trend conditions worth watching at the open;
-it is not an entry. An entry still needs a completed-bar signal, fresh pre-trade
+Selection runs in two stages. Hard filters come first and are code, not opinion:
+enough stored history, traded value above the floor, a known NSE market-cap tier
+at or above the configured minimum, and fresh reference data. The stocks that
+pass form the pool. Six specialist agents (news, sentiment, technical, sector,
+liquidity, brokerage) then assess the pool and the selection judge makes the
+final call on what to watch (see selection_agents.py). Without a configured
+model the deterministic ranking is used, and the report says which happened.
+
+This is a watchlist, not a trade list and not a forecast. A pick means the
+instrument is worth watching at the open; it is not an entry. An entry still needs a completed-bar signal, fresh pre-trade
 evidence, the review roles and every journal gate, during market hours.
 
 Read only: no order path, no journal write. Email is off unless configured.
@@ -33,6 +40,7 @@ from typing import Any
 import technical
 from history import HistoryStore
 
+import selection_agents
 import sentiment
 from reference import ReferenceStore
 
@@ -145,15 +153,47 @@ def score(candidate: dict, settings: dict) -> dict[str, Any]:
     return {"total": round(total, 2), "parts": parts, "maximum": 12.0}
 
 
-def build(config_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
-    """Assemble the pre-market report for every instrument in the universe."""
+def hard_filters(candidate: dict, settings: dict) -> list[str]:
+    """Reasons a stock is kept out of the pool. Empty means it passed. Code, not opinion."""
+    reasons = []
+    ref = candidate["reference"]
+    minimum = settings["min_market_cap_tier"]
+    if not ref.get("known"):
+        reasons.append(
+            "not in the cached NSE index files, so its size is unknown; run reference.py refresh"
+        )
+    else:
+        tier = ref.get("market_cap_tier")
+        if TIER_RANK.get(tier, 0) < TIER_RANK[minimum]:
+            reasons.append(f"{tier or 'unclassified'} cap is below the {minimum}-cap minimum")
+        if ref.get("stale_days", 0) > settings["max_reference_age_days"]:
+            reasons.append(
+                f"reference data is {ref['stale_days']} days old (limit "
+                f"{settings['max_reference_age_days']}); run reference.py refresh"
+            )
+    turnover = candidate["liquidity"]["turnover_inr"]
+    floor = float(settings["min_turnover_inr"])
+    if turnover is None or turnover < floor:
+        reasons.append(
+            f"traded value {_rupees(turnover)} is below the INR {floor:,.0f} liquidity floor"
+        )
+    return reasons
+
+
+def build(
+    config_path: Path, now: dt.datetime | None = None, reviewer: Any = None
+) -> dict[str, Any]:
+    """Assemble the pre-market report: score, filter, then let the agents and judge choose."""
     from decision_pipeline import DailyCoordinator, read_json
 
-    coordinator = DailyCoordinator(config_path)
+    coordinator = DailyCoordinator(config_path, reviewer=reviewer)
     clock = (now or dt.datetime.now(IST)).astimezone(IST)
+    chooser = coordinator.config["selection"]
     settings = {
         "min_turnover_inr": coordinator.config["min_turnover_inr"],
         "min_scored_headlines": coordinator.config.get("min_scored_headlines", 3),
+        "min_market_cap_tier": chooser["min_market_cap_tier"],
+        "max_reference_age_days": chooser["max_reference_age_days"],
     }
     universe = read_json(coordinator.path("universe"))
     history = HistoryStore(coordinator.path("history_db"))
@@ -218,17 +258,72 @@ def build(config_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
         )
         entry["news"] = sentiment.summarize(news.get(symbol, []), clock.isoformat())
         entry["score"] = score(entry, settings)
+        entry["filters"] = hard_filters(entry, settings)
+        entry["eligible"] = not entry["filters"]
         candidates.append(entry)
     candidates.sort(key=lambda item: item["score"]["total"], reverse=True)
     top = int(coordinator.config["max_candidates"])
     for rank, item in enumerate(candidates, 1):
         item["rank"] = rank
-        item["watch"] = rank <= top
+    pool = [item for item in candidates if item["eligible"]][: chooser["pool"]]
+    session = str(clock.date())
+    if chooser["agents"]:
+        selection = selection_agents.run_selection(
+            pool,
+            session,
+            coordinator.reviewer,
+            top,
+            reserve=lambda count: coordinator.store.reserve_model_calls(
+                session, count, coordinator.config["max_model_calls_per_day"]
+            ),
+            min_specialists=chooser["min_specialists"],
+        )
+    else:
+        selection = {
+            "mode": "deterministic",
+            "reason": "selection agents are turned off in pipeline.json; this is the "
+            "deterministic ranking",
+            "pool": [item["symbol"] for item in pool],
+            "watching": [item["symbol"] for item in pool[:top]],
+            "judge": None,
+            "specialists": {},
+            "model_calls": 0,
+        }
+    picks = {pick["symbol"]: pick for pick in (selection["judge"] or {}).get("picks", [])}
+    for item in candidates:
+        symbol = item["symbol"]
+        item["watch"] = symbol in selection["watching"]
+        item["judge_pick"] = picks.get(symbol)
+        item["agent_views"] = {
+            role: view["assessments"][symbol]
+            for role, view in selection.get("specialists", {}).items()
+            if view["status"] == "ok" and symbol in view["assessments"]
+        }
+    order = {symbol: index for index, symbol in enumerate(selection["watching"])}
+    candidates.sort(key=lambda item: (order.get(item["symbol"], len(order)), item["rank"]))
     return {
         "as_of": clock.isoformat(),
-        "session_date": str(clock.date()),
+        "session_date": session,
         "mode": "pre_market_research",
-        "watching": [item["symbol"] for item in candidates[:top]],
+        "watching": selection["watching"],
+        "selection": {
+            key: selection.get(key) for key in ("mode", "reason", "pool", "judge", "model_calls")
+        }
+        | {
+            "specialists": {
+                role: {
+                    "status": view["status"],
+                    **({"reason": view["reason"]} if "reason" in view else {}),
+                    **{key: view[key] for key in ("provider", "model") if key in view},
+                }
+                for role, view in selection.get("specialists", {}).items()
+            },
+            "filters": {
+                "min_market_cap_tier": settings["min_market_cap_tier"],
+                "min_turnover_inr": settings["min_turnover_inr"],
+                "max_reference_age_days": settings["max_reference_age_days"],
+            },
+        },
         "candidates": candidates,
         "blocked": blocked,
         "universe_source": universe.get("source"),
@@ -277,6 +372,32 @@ def render(report: dict) -> str:
             f"<td>{esc(part['reason'])}</td></tr>"
             for part in item["score"]["parts"]
         )
+        pick = item.get("judge_pick")
+        verdict = (
+            f'<p class="pick"><strong>Judge: {esc(pick["rating"])}, {esc(pick["conviction"])} '
+            f"conviction.</strong> {esc(pick['reason'])}</p>"
+            if pick
+            else '<p class="pick">On the watchlist by deterministic rank.</p>'
+            if item["watch"]
+            else ""
+        )
+        filtered = (
+            "<p class='filtered'>Kept out of the pool: " + esc("; ".join(item["filters"])) + ".</p>"
+            if item["filters"]
+            else ""
+        )
+        views = "".join(
+            f"<tr><td>{esc(role)}</td><td><span class='stance {esc(view['stance'])}'>"
+            f"{esc(view['stance'])}</span></td><td>{esc(view['summary'])}</td></tr>"
+            for role, view in item.get("agent_views", {}).items()
+        )
+        sector = item["sector"]
+        sector_line = (
+            f"{esc(sector.get('direction'))} {esc(sector.get('return1_pct'))}% last session, "
+            f"{esc(sector.get('return5_pct'))}% over 5, {esc(sector.get('return20_pct'))}% over 20"
+            if sector.get("available")
+            else esc(sector.get("reason"))
+        )
         rows.append(
             f"""<article class="card{" watch" if item["watch"] else ""}">
 <h3>#{esc(item["rank"])} {esc(item["symbol"])} <small>{esc(item["name"])}</small>
@@ -285,20 +406,38 @@ def render(report: dict) -> str:
 {esc(item["reference"].get("market_cap_tier") or "tier unknown")} cap ·
 {"F&amp;O eligible, lot " + esc(item["fno"]["lot_size"]) if item["fno"]["eligible"] else "not F&amp;O eligible"} ·
 liquidity {_rupees(item["liquidity"]["turnover_inr"])}</p>
+{verdict}{filtered}
 <p>Trend <strong>{esc(technicals["trend"]["label"])}</strong> ({esc(technicals["trend"]["reason"])}).
 RSI <strong>{esc(technicals["rsi14"])}</strong> — {esc(technicals["rsi"]["note"])}.
 Last close INR {esc(technicals["close"])} on {esc(technicals["session"])}; 5-session
 {esc(technicals["return5_pct"])}%, 20-session {esc(technicals["return20_pct"])}%.</p>
-<p>Sector: {esc(item["sector"].get("index") or "unmapped")} —
-{("up/down " + esc(item["sector"].get("return5_pct")) + "% over 5 sessions") if item["sector"].get("available") else esc(item["sector"].get("reason"))}.</p>
+<p>Sector: {esc(sector.get("index") or "unmapped")} — {sector_line}.</p>
 <p>Headlines: <strong>{esc(mood["band"])}</strong> from {esc(mood["scored"])} scored of
 {esc(mood["headlines"])} collected ({esc(mood["confidence"])} confidence).</p>
 {f"<h4>Broker calls stated in headlines</h4><ul>{calls}</ul>" if calls else ""}
 {f"<h4>Recent headlines</h4><ul>{headlines}</ul>" if headlines else ""}
+{f"<h4>Specialist agents</h4><table><tr><th>Agent</th><th>Stance</th><th>Assessment</th></tr>{views}</table>" if views else ""}
 <details><summary>How this rank was scored</summary>
 <table><tr><th>Factor</th><th>Points</th><th>Reason</th></tr>{factors}</table></details>
 </article>"""
         )
+    chosen = report["selection"]
+    judge = chosen.get("judge") or {}
+    agents = "".join(
+        f"<li>{esc(role)}: {esc(view['status'])}"
+        + (f" ({esc(view['model'])})" if view.get("model") else "")
+        + (f" — {esc(view['reason'])}" if view.get("reason") else "")
+        + "</li>"
+        for role, view in chosen.get("specialists", {}).items()
+    )
+    limits = chosen["filters"]
+    panel = f"""<div class="card judge"><h3>Final call: {esc(chosen["mode"])}</h3>
+<p>{esc(chosen["reason"])}.</p>
+{f"<p><strong>Judge:</strong> {esc(judge['summary'])}</p>" if judge.get("summary") else ""}
+<p class="meta">Hard filters: {esc(limits["min_market_cap_tier"])} cap or bigger, traded value at least
+{_rupees(limits["min_turnover_inr"])}, reference data at most {esc(limits["max_reference_age_days"])} days old.
+Pool: {esc(", ".join(chosen["pool"] or []) or "empty")} · model calls {esc(chosen["model_calls"])}</p>
+{f"<h4>Agents</h4><ul>{agents}</ul>" if agents else ""}</div>"""
     blocked = "".join(
         f"<li>{esc(item['symbol'])}: {esc(item['reason'])}</li>" for item in report["blocked"]
     )
@@ -325,12 +464,19 @@ background:#f0ecfb;color:var(--purple)}}
 table{{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px}}
 td,th{{text-align:left;padding:5px 7px;border-bottom:1px solid var(--line)}}td.n{{text-align:right}}
 summary{{cursor:pointer;font-size:12px;color:var(--muted);margin-top:10px}}
+.pick{{background:#f0ecfb;border-radius:10px;padding:8px 12px}}
+.filtered{{color:var(--red);font-size:13px}}
+.stance{{display:inline-block;padding:0 6px;border-radius:999px;font-size:11px;font-weight:600;
+background:#f0ecfb;color:var(--purple)}}.stance.positive{{background:#e6f3ef;color:var(--green)}}
+.stance.negative{{background:#fae9ec;color:var(--red)}}
+.card.judge{{border-color:#c5b3ea}}
 .notice{{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 20px;font-size:13px}}
 footer{{margin-top:28px;font-size:12px;color:var(--muted)}}</style></head>
 <body><main>
 <h1>Pre-market watchlist</h1>
 <p class="meta">{esc(report["as_of"])} · watching {esc(", ".join(report["watching"]) or "nothing")}</p>
 <div class="notice"><strong>{esc(report["notice"])}</strong></div>
+{panel}
 {"".join(rows) or '<div class="card">No instrument had enough stored history to assess.</div>'}
 {f'<div class="card"><h4>Not assessed</h4><ul>{blocked}</ul></div>' if blocked else ""}
 <footer>India Trade Lab · universe: {esc(report["universe_source"])} ·
@@ -404,6 +550,8 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "session_date": report["session_date"],
                     "watching": report["watching"],
+                    "final_call": report["selection"]["mode"],
+                    "why": report["selection"]["reason"],
                     "report_html": report["report_html"],
                     "email": report.get("email"),
                     "blocked": report["blocked"],

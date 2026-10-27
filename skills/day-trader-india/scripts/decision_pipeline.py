@@ -60,8 +60,18 @@ OPTIONAL_CONFIG = {
     "smtp_user": "",
     "email_from": "",
     "email_to": "",
+    # Pre-market selection: hard filters first, then six specialist agents and a judge.
+    "selection": {
+        "agents": True,
+        "pool": 10,
+        "min_specialists": 4,
+        "min_market_cap_tier": "large",
+        "max_reference_age_days": 7,
+    },
+    # Market-wide RSS feeds matched to stocks by name; ET Markets by default.
+    "market_feeds": ["https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"],
 }
-NESTED_DEFAULTS = ("debate", "memory")
+NESTED_DEFAULTS = ("debate", "memory", "selection")
 
 DEFAULT_CONFIG = {
     **OPTIONAL_CONFIG,
@@ -244,6 +254,23 @@ class DailyCoordinator:
             or not 1 <= cfg["memory"]["horizon_sessions"] <= 20
         ):
             raise ValueError("Debate rounds must be 1-3 and the memory window 1-20 sessions")
+        chooser = cfg["selection"]
+        if (
+            type(chooser["agents"]) is not bool
+            or type(chooser["pool"]) is not int
+            or not 1 <= chooser["pool"] <= 15
+            or type(chooser["min_specialists"]) is not int
+            or not 1 <= chooser["min_specialists"] <= 6
+            or chooser["min_market_cap_tier"] not in ("large", "mid", "small")
+            or type(chooser["max_reference_age_days"]) is not int
+            or not 1 <= chooser["max_reference_age_days"] <= 31
+        ):
+            raise ValueError(
+                "Selection needs a pool of 1-15, a quorum of 1-6 specialists, a market-cap "
+                "tier of large/mid/small and a reference age of 1-31 days"
+            )
+        if not isinstance(cfg["market_feeds"], list) or len(cfg["market_feeds"]) > 5:
+            raise ValueError("market_feeds must be a list of at most five feed URLs")
         if cfg.get("version") != 1 or cfg.get("mode") != "paper_research":
             raise ValueError("Only version-1 paper_research configuration is supported")
         for key in DEFAULT_CONFIG:

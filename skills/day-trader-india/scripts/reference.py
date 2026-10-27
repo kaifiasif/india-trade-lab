@@ -10,8 +10,12 @@ SMALLCAP 250) rather than a computed capitalisation. NSE classifies by full
 market capitalisation when it builds those indices, so membership is a sourced
 classification; a number scraped from an unofficial page would not be.
 
-GET only, fixed hosts from the configured catalogue, no redirects, bounded bytes,
-no credentials. Nothing here places an order.
+Sector index closes come from your own Kite login (daily candles for an index
+instrument token, read from the environment) or from a CSV you downloaded. Only
+completed sessions are stored, so a pre-market run never sees a partial day.
+
+GET only, fixed hosts from the configured catalogue, no redirects, bounded bytes.
+Nothing here places an order.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ import csv
 import datetime as dt
 import io
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -184,10 +189,12 @@ class ReferenceStore:
                 if industry and symbol not in sectors:
                     sectors[symbol] = industry
         lots: dict[str, int] = {}
+        lots_read = False
         try:
             lots = parse_lot_sizes(fetcher(catalogue["lot_sizes"]))
+            lots_read = True
         except ValueError as exc:
-            notes.append(f"F&O lot sizes: {exc}")
+            notes.append(f"F&O lot sizes: {exc}; kept the previously cached values")
         if not tiers and not lots:
             raise ValueError("no reference source could be read; " + "; ".join(notes))
         sector_map = catalogue.get("sector_indices", {})
@@ -200,10 +207,14 @@ class ReferenceStore:
                     "SELECT sector, tier, tier_index, fno, lot_size FROM reference WHERE symbol=?",
                     (symbol,),
                 ).fetchone()
+                fno, lot = int(symbol in lots), lots.get(symbol)
                 if existing:
                     sector = sector or existing[0]
                     tier = tier or existing[1]
                     tier_index = tier_index or existing[2]
+                    if not lots_read:
+                        # The lot file was unreadable: an outage is not a delisting.
+                        fno, lot = existing[3], existing[4]
                 conn.execute(
                     "INSERT OR REPLACE INTO reference VALUES (?,?,?,?,?,?,?,?,?)",
                     (
@@ -211,14 +222,14 @@ class ReferenceStore:
                         sector,
                         tier,
                         tier_index,
-                        int(symbol in lots),
-                        lots.get(symbol),
+                        fno,
+                        lot,
                         sector_map.get(sector or ""),
                         clock.isoformat(),
                         json.dumps(
                             {
                                 "tier": tier_index,
-                                "lot_size": catalogue["lot_sizes"] if symbol in lots else None,
+                                "lot_size": catalogue["lot_sizes"] if lot else None,
                             }
                         ),
                     ),
@@ -283,6 +294,8 @@ class ReferenceStore:
                 "ORDER BY date",
                 (index_name, str(as_of.astimezone(IST).date())),
             ).fetchall()
+        known = set(completed([(row[0], row[1]) for row in rows], as_of))
+        rows = [row for row in rows if (row[0], row[1]) in known]
         if len(rows) < 2:
             return {
                 "index": index_name,
@@ -310,6 +323,71 @@ class ReferenceStore:
         }
 
 
+def completed(rows: list[tuple[str, float]], now: dt.datetime) -> list[tuple[str, float]]:
+    """Drop today's row until the session has closed; a partial day is not a close."""
+    local = now.astimezone(IST)
+    closed = local.time() >= dt.time(15, 35)
+    today = str(local.date())
+    return [(date, close) for date, close in rows if date < today or (date == today and closed)]
+
+
+def read_sector_csv(raw: bytes) -> list[tuple[str, float]]:
+    """Date and Close columns from a downloaded index history (niftyindices.com or similar)."""
+    rows = []
+    for row in _rows(raw):
+        date_text = row.get("Date") or row.get("date") or row.get("HistoricalDate") or ""
+        close_text = (row.get("Close") or row.get("close") or "").replace(",", "")
+        parsed = None
+        for pattern in ("%Y-%m-%d", "%d-%b-%Y", "%d %b %Y", "%d-%m-%Y"):
+            try:
+                parsed = dt.datetime.strptime(date_text.strip(), pattern).date()
+                break
+            except ValueError:
+                continue
+        try:
+            close = float(close_text)
+        except ValueError:
+            continue
+        if parsed and close > 0:
+            rows.append((str(parsed), close))
+    if not rows:
+        raise ValueError("no Date/Close rows found in the index file")
+    return sorted(rows)
+
+
+def kite_sector_closes(token: str, days: int, now: dt.datetime, opener=None) -> list[tuple]:
+    """Daily index closes from Kite for an index instrument token, using your own login."""
+    if not token.isdigit() or not 5 <= days <= 400:
+        raise ValueError("Use a numeric Kite index token and 5-400 days")
+    key, access = os.environ.get("KITE_API_KEY", ""), os.environ.get("KITE_ACCESS_TOKEN", "")
+    if not key or not access:
+        raise ValueError("Set KITE_API_KEY and KITE_ACCESS_TOKEN privately outside chat")
+    last = now.astimezone(IST).date()
+    query = urllib.parse.urlencode(
+        {"from": f"{last - dt.timedelta(days=days)} 00:00:00", "to": f"{last} 23:59:59"}
+    )
+    request = urllib.request.Request(
+        f"https://api.kite.trade/instruments/historical/{token}/day?{query}",
+        headers={"Authorization": f"token {key}:{access}", "X-Kite-Version": "3"},
+        method="GET",
+    )
+    try:
+        handle = (opener or urllib.request.build_opener(NoRedirect)).open(request, timeout=20)
+        with handle as response:
+            raw = response.read(MAX_BYTES + 1)
+        payload = json.loads(raw)
+        candles = payload["data"]["candles"]
+    except (OSError, urllib.error.URLError, ValueError, KeyError, TypeError):
+        raise ValueError("Kite index history request failed; no retries") from None
+    rows = []
+    for candle in candles:
+        try:
+            rows.append((str(dt.datetime.fromisoformat(candle[0]).date()), float(candle[4])))
+        except (ValueError, TypeError, IndexError):
+            continue
+    return sorted(rows)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=Path("data/observatory/reference.sqlite"))
@@ -320,6 +398,12 @@ def main(argv: list[str] | None = None) -> int:
     look.add_argument("--symbol", required=True)
     sector = sub.add_parser("sector")
     sector.add_argument("--index", required=True)
+    sync = sub.add_parser("sync-sector", help="Store completed daily closes for a sector index")
+    sync.add_argument("--index", required=True, help='Index name, e.g. "NIFTY IT"')
+    source = sync.add_mutually_exclusive_group(required=True)
+    source.add_argument("--kite-token", help="Kite instrument token of the index (INDICES)")
+    source.add_argument("--csv", type=Path, help="Downloaded index history with Date, Close")
+    sync.add_argument("--days", type=int, default=60)
     args = parser.parse_args(argv)
     try:
         store = ReferenceStore(args.db)
@@ -328,6 +412,19 @@ def main(argv: list[str] | None = None) -> int:
             result: Any = store.refresh(catalogue)
         elif args.command == "lookup":
             result = store.lookup(args.symbol)
+        elif args.command == "sync-sector":
+            now = dt.datetime.now(IST)
+            if args.kite_token:
+                rows, origin = kite_sector_closes(args.kite_token, args.days, now), "kite:day"
+            else:
+                rows, origin = read_sector_csv(args.csv.read_bytes()), f"csv:{args.csv.name}"
+            kept = completed(rows, now)
+            result = {
+                "index": args.index,
+                "stored": store.record_sector_closes(args.index, kept, origin),
+                "skipped_incomplete": len(rows) - len(kept),
+                "performance": store.sector_performance(args.index, now),
+            }
         else:
             result = store.sector_performance(args.index, dt.datetime.now(IST))
         print(json.dumps(result, indent=2))
