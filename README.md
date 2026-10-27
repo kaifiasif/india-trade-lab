@@ -20,6 +20,10 @@ or use the Python CLI below.
 - Fifty-session historical coverage checks for forward engine entries; synthetic history never satisfies that gate.
 - Fourteen portable skills, optional native Claude/Codex specialist profiles, synthetic examples and offline regression tests.
 - A persistent daily research coordinator with six evidence-bound model roles, vetoes, frozen paper proposals, audit events and a reporting-only ₹80,000 goal.
+- Bull/bear and risk **debates** over the frozen ticket, ending in a five-tier rating that can only stop or downgrade an entry. See [debate.md](skills/day-trader-india/references/debate.md).
+- **Decision memory**: every rated call is settled on later stored prices and becomes a point-in-time lesson for later debates, with a hit-rate and alpha scorecard.
+- A **backtest grid** over stored sessions with a doubled-cost stress run, per-symbol, per-month and first/second-half results. See [backtest.md](skills/day-trader-india/references/backtest.md).
+- A **preflight check** that names every missing input and its fix, plus collectors for dated news evidence and the machine-checkable pre-trade checks.
 - A session router for India/US timezones and optional continuous read-only Binance spot collection. See [daily service setup](skills/day-trader-india/references/daily-service.md).
 
 The supplied opening-range rule is a test harness, not a proven trading strategy. A passing test verifies software behaviour, not investment performance.
@@ -82,6 +86,31 @@ The funnel and the session tape render in 3D with a bundled copy of Three.js
 [recap video](recap-video/README.md) renders a recorded session to MP4 with Remotion.
 
 To paper trade on live Kite quotes and candles, follow [live data setup](docs/live-data.md).
+Before trusting any run, check the setup:
+
+```bash
+python3 scripts/preflight.py --config data/observatory/pipeline.json
+```
+
+It reports each prerequisite separately — calendar, universe, history, book,
+feeds, evidence, models, credentials — with the exact command that fixes it.
+
+### Compared with general multi-agent trading frameworks
+
+This project deliberately differs from frameworks where a model decides the
+trade:
+
+| | Here |
+| --- | --- |
+| Who sizes the position | Deterministic code, from the journal's risk caps. No model is asked for a quantity |
+| What a rating can do | Stop or downgrade an entry. It can never create or enlarge one |
+| Evidence | Supplied, dated and cited by ID; an uncited claim is refused |
+| Hindsight | Lessons reach a debate only once their outcome was known at that cutoff |
+| Execution | Paper only. There is no live order path in this repository |
+| Market | NSE/BSE cash equity, INR, Asia/Kolkata, with a dated exchange calendar |
+
+A debate makes the reasoning legible and gives a second line of refusal. It does
+not make the strategy profitable, and no result here is evidence that it is.
 
 Books and event logs live under `data/observatory/` and are retained between runs.
 Historical coverage and import instructions are in [the observatory guide](docs/observatory.md).

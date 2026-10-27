@@ -15,6 +15,9 @@ from data_sync import refresh_current
 from decision_pipeline import DailyCoordinator, read_json
 from market_router import route_all
 
+import evidence
+import pretrade
+
 
 class MarketService:
     """One process; the coordinator's durable lease prevents concurrent decision runs."""
@@ -28,6 +31,7 @@ class MarketService:
         now=None,
         collect=crypto_data.collect,
         refresh_india: bool = False,
+        prepare: bool = False,
     ) -> None:
         if len(symbols) > 5 or len(set(symbols)) != len(symbols):
             raise ValueError("Use at most five distinct crypto spot pairs")
@@ -39,6 +43,7 @@ class MarketService:
         self.now = now or (lambda: dt.datetime.now(dt.timezone.utc))
         self.collect = collect
         self.refresh_india = refresh_india
+        self.prepare = prepare
         with sqlite3.connect(self.path) as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY, data TEXT)")
             conn.execute("CREATE TABLE IF NOT EXISTS collected (symbol TEXT PRIMARY KEY, at REAL)")
@@ -60,6 +65,8 @@ class MarketService:
             try:
                 if self.refresh_india:
                     result["feed"] = refresh_current(self.coordinator.config_path)
+                if self.prepare and india["status"] == "OPEN" and not halted:
+                    result["prepared"] = self.prepare_inputs(now)
                 report = self.coordinator.run_once(
                     allow_entries=india["status"] == "OPEN" and not halted
                 )
@@ -88,6 +95,25 @@ class MarketService:
             conn.execute("INSERT OR REPLACE INTO state VALUES (1,?)", (json.dumps(result),))
         return result
 
+    def prepare_inputs(self, now: dt.datetime) -> dict:
+        """Refresh collected evidence and re-derive pre-trade checks for this cutoff.
+
+        Each step is reported separately and a failure never stops the research run:
+        the coordinator still refuses the entry when an input is missing.
+        """
+        prepared: dict = {}
+        try:
+            collected = evidence.collect(self.coordinator.config_path, now)
+            prepared["evidence"] = {"symbols": collected["symbols"], "notes": collected["notes"]}
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            prepared["evidence"] = {"status": "DATA_BLOCK", "reason": str(exc)[:200]}
+        try:
+            built = pretrade.build(self.coordinator.config_path, None, now)
+            prepared["pretrade"] = {"ready": built["ready"], "refused": built["refused"]}
+        except (ValueError, KeyError, TypeError, OSError, sqlite3.Error) as exc:
+            prepared["pretrade"] = {"status": "DATA_BLOCK", "reason": str(exc)[:200]}
+        return prepared
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -100,6 +126,11 @@ def main() -> int:
     parser.add_argument(
         "--refresh-india", action="store_true", help="Opt in to mapped read-only broker feeds"
     )
+    parser.add_argument(
+        "--prepare",
+        action="store_true",
+        help="Collect news evidence and re-derive pre-trade checks each open tick",
+    )
     args = parser.parse_args()
     try:
         worker = MarketService(
@@ -107,6 +138,7 @@ def main() -> int:
             tuple(filter(None, args.crypto_symbols.split(","))),
             args.us_calendar,
             refresh_india=args.refresh_india,
+            prepare=args.prepare,
         )
         while True:
             print(json.dumps(worker.tick()), flush=True)

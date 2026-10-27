@@ -472,7 +472,7 @@ function renderResearch() {
               (report.calls || [])
                   .map(
                       (call, index) =>
-                          `<button class="research-call" data-research-call="${index}"><strong>${esc(call.symbol)}</strong><span>${esc(readable(call.decision))}${report.archived ? " · ARCHIVED" : ""}</span><small>${esc(call.reasons?.join(" · "))}</small></button>`,
+                          `<button class="research-call" data-research-call="${index}"><strong>${esc(call.symbol)}${call.rating ? ` <span class="rating ${esc(call.rating)}">${esc(call.rating)}</span>` : ""}</strong><span>${esc(readable(call.decision))}${call.conviction ? ` · ${esc(call.conviction)} conviction` : ""}${report.archived ? " · ARCHIVED" : ""}</span><small>${esc(call.reasons?.join(" · "))}</small></button>`,
                   )
                   .join("") ||
               `<p class="empty">${esc(report.blockers?.join(" · ") || "No current proposals")}</p>`
@@ -509,6 +509,16 @@ function renderResearch() {
         ?.addEventListener("click", () =>
             showDetails("Recorded paper performance", report.performance),
         );
+    const memory = report?.memory;
+    const score = memory?.scorecard;
+    $("research-memory").innerHTML = score?.settled
+        ? `<div class="market-sessions">${Object.entries(score.by_rating)
+              .map(
+                  ([rating, row]) =>
+                      `<div><strong>${esc(rating)} <small>${esc(row.count)} settled</small></strong><span>${row.hit_rate_pct == null ? "no direction claimed" : esc(row.hit_rate_pct) + "% called"}</span><small>mean ${esc(row.mean_raw_return_pct)}% raw${row.mean_alpha_pp == null ? "" : " · " + esc(row.mean_alpha_pp) + " pp alpha"}</small></div>`,
+              )
+              .join("")}</div><p class="section-note">${esc(score.notice)}</p>`
+        : '<p class="section-note">No rated call has settled yet. Each one is scored once its holding window closes in stored history.</p>';
     const service = research.service;
     $("market-sessions").innerHTML = service
         ? `<div class="market-sessions">${(service.markets || [])

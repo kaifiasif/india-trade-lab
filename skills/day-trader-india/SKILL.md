@@ -188,6 +188,24 @@ reconciliation and restart recovery. It is paper-only. Its `replay` command
 runs one historical session into a new `replay_demo` book. Read
 [engine.md](references/engine.md) for parts, exit rules and what is not built.
 
+## Debate, ratings, memory and backtest
+
+`scripts/debate.py` runs bull/bear and risk debates over the frozen ticket and
+returns a five-tier rating; `scripts/memory.py` settles every rated call on later
+stored prices and keeps point-in-time lessons; `scripts/backtest.py` replays the
+engine across stored sessions with a doubled-cost stress run. Read
+[debate.md](references/debate.md) and [backtest.md](references/backtest.md).
+A rating can only stop or downgrade a ticket; code still sizes every position.
+
+## Check the setup before trusting a run
+
+`scripts/preflight.py` checks each prerequisite separately and names the exact
+fix, instead of one DATA_BLOCK covering six possible causes.
+`scripts/evidence.py` collects dated headlines and exchange filings, and
+`scripts/pretrade.py` derives the eight machine-checkable pre-trade checks while
+you attest the two that need judgement. The repository guide `docs/live-data.md`
+covers the full live setup.
+
 ## Optional additions and boundaries
 
 Read [resources.md](references/resources.md) for official learning/data resources
