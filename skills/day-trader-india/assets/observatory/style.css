@@ -2457,3 +2457,35 @@ th {
         transition: none;
     }
 }
+
+.rating {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 8px;
+    font-weight: 600;
+    vertical-align: middle;
+    background: var(--lavender);
+    color: var(--purple);
+}
+.rating.Buy,
+.rating.Overweight {
+    background: #e6f3ef;
+    color: var(--green);
+}
+.rating.Underweight,
+.rating.Sell {
+    background: #fae9ec;
+    color: var(--red);
+}
+.rating.Hold {
+    background: #fbf3e2;
+    color: #a87a1e;
+}
+.subhead {
+    margin: 18px 23px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6f6880;
+}

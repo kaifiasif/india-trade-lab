@@ -123,10 +123,19 @@ there are no retries. This is a call/token bound, not an exact rupee cost cap.
 The service does not change model or limits to recover a failed decision.
 
 ```bash
+python3 scripts/preflight.py --config data/observatory/pipeline.json
+python3 scripts/pretrade.py attest --config data/observatory/pipeline.json --symbol NSE:INFY
 python3 scripts/decision_pipeline.py run --config data/observatory/pipeline.json
 python3 scripts/market_service.py --config data/observatory/pipeline.json \
-  --refresh-india --crypto-symbols BTCUSDT,ETHUSDT
+  --refresh-india --prepare --crypto-symbols BTCUSDT,ETHUSDT
 ```
+
+Run `preflight.py` first: it checks every input on its own and names the fix for
+each gap. `attest` records, once per session, the two checks that need your
+judgement. With `--prepare` the worker then collects dated news evidence and
+re-derives the machine-checkable pre-trade checks on each open tick, so those
+files stay current without being written by hand. Every collector failure is
+reported and still leaves the coordinator to refuse the entry.
 
 The worker performs scheduled research. Output is BUY_PAPER_PROPOSAL,
 SELL_PAPER_PROPOSAL, HOLD_PAPER, WAIT or DATA_BLOCK. Only a breakout on the

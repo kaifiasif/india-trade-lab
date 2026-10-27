@@ -91,7 +91,25 @@ def normalize_quote(
     )
     if bid > ask or not -5 <= (received - observed).total_seconds() <= 120:
         raise ValueError("Quote is crossed, stale or future dated")
+    # Circuit limits when the provider states them, so the price-band check can be
+    # verified against the exchange's own bounds instead of being asserted by hand.
+    band = {}
+    for field, name in (
+        ("lower_circuit_limit", "lower_circuit_inr"),
+        ("upper_circuit_limit", "upper_circuit_inr"),
+    ):
+        value = quote.get(field)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            band[name] = str(paper_book.number(value, True))
+    if len(band) == 2 and not (
+        paper_book.number(band["lower_circuit_inr"], True)
+        <= bid
+        <= ask
+        <= paper_book.number(band["upper_circuit_inr"], True)
+    ):
+        raise ValueError("Quote lies outside the stated circuit band")
     return {
+        **band,
         "symbol": symbol,
         "bid_inr": str(bid),
         "ask_inr": str(ask),

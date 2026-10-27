@@ -17,11 +17,15 @@ from typing import Any
 
 import agent_runtime
 import agent_workflow
+import debate
 import guardrails
 import model_providers
 import paper_analytics
+import report_html
 import research_lab
+import technical
 from history import HistoryStore
+from memory import DecisionMemory
 from watchlist import build_watchlist
 
 import engine
@@ -40,7 +44,16 @@ OPTIONAL_CONFIG = {
     "daily_bars": "daily-bars.csv",
     "benchmark_symbol": "NSE:NIFTY50",
     "benchmark_observations": "benchmark-quotes.json",
+    # Bull/bear and risk debates with research- and portfolio-manager ratings.
+    "debate": {"enabled": True, "research_rounds": 1, "risk_rounds": 1},
+    # Rated calls are settled on later stored prices and become point-in-time lessons.
+    "memory": {"enabled": True, "horizon_sessions": 1, "reflect": False},
+    "memory_db": "memory.sqlite",
+    "reports_dir": "reports",
+    "local_base_url": "http://127.0.0.1:11434/v1",
+    "local_timeout_seconds": 60,
 }
+NESTED_DEFAULTS = ("debate", "memory")
 
 DEFAULT_CONFIG = {
     **OPTIONAL_CONFIG,
@@ -207,6 +220,22 @@ class DailyCoordinator:
         self.config_path = config_path.resolve()
         self.config = {**OPTIONAL_CONFIG, **read_json(config_path)}
         cfg = self.config
+        for key in NESTED_DEFAULTS:
+            if not isinstance(cfg[key], dict) or set(cfg[key]) - set(OPTIONAL_CONFIG[key]):
+                raise ValueError(f"Unknown {key} setting")
+            cfg[key] = {**OPTIONAL_CONFIG[key], **cfg[key]}
+        if (
+            type(cfg["debate"]["enabled"]) is not bool
+            or any(
+                type(cfg["debate"][key]) is not int or not 1 <= cfg["debate"][key] <= 3
+                for key in ("research_rounds", "risk_rounds")
+            )
+            or type(cfg["memory"]["enabled"]) is not bool
+            or type(cfg["memory"]["reflect"]) is not bool
+            or type(cfg["memory"]["horizon_sessions"]) is not int
+            or not 1 <= cfg["memory"]["horizon_sessions"] <= 20
+        ):
+            raise ValueError("Debate rounds must be 1-3 and the memory window 1-20 sessions")
         if cfg.get("version") != 1 or cfg.get("mode") != "paper_research":
             raise ValueError("Only version-1 paper_research configuration is supported")
         for key in DEFAULT_CONFIG:
@@ -227,6 +256,7 @@ class DailyCoordinator:
             raise ValueError("Target R must be at least one")
         self.now = now or (lambda: dt.datetime.now(engine.IST))
         self.store = DecisionStore(self.path("decision_db"))
+        self.memory = DecisionMemory(self.path("memory_db")) if cfg["memory"]["enabled"] else None
         self.owner = uuid.uuid4().hex
         if cfg["review_workflow"] not in ("intraday", "intraday_debate") or cfg[
             "screening_mode"
@@ -333,6 +363,8 @@ class DailyCoordinator:
                 "provider": self.reviewer.name,
             }
             book = None
+            if self.memory:
+                report["memory"] = self.settle_memory(started)
             try:
                 book = read_book(self.path("book"))
                 history = HistoryStore(self.path("history_db"))
@@ -460,6 +492,12 @@ class DailyCoordinator:
                     "blockers": report["blockers"],
                 },
             )
+            try:
+                page = self.path("reports_dir") / f"{run_id}.html"
+                report_html.write(report, page)
+                report["report_html"] = str(page)
+            except (OSError, ValueError, KeyError, TypeError):
+                report["report_html"] = None
             with sqlite3.connect(self.store.path) as conn:
                 conn.execute(
                     "UPDATE runs SET completed_at=?,report=? WHERE id=?",
@@ -468,6 +506,31 @@ class DailyCoordinator:
             return report
         finally:
             self.store.release(self.owner)
+
+    def benchmark(self) -> dict | None:
+        path = self.path("benchmark_observations")
+        return read_json(path) if path.is_file() else None
+
+    def settle_memory(self, as_of: dt.datetime) -> dict:
+        """Settle closed holding windows; a failure is reported and never blocks the run."""
+        reflect = None
+        if self.config["memory"]["reflect"] and getattr(self.reviewer, "uses_network", False):
+
+            def reflect(outcome: dict) -> str:
+                if not self.store.reserve_model_calls(
+                    str(as_of.date()), 1, self.config["max_model_calls_per_day"]
+                ):
+                    raise ValueError("Model budget exhausted")
+                return debate.reflect(self.reviewer, outcome)
+
+        try:
+            result = self.memory.settle(
+                HistoryStore(self.path("history_db")), as_of, self.benchmark(), reflect
+            )
+            result["scorecard"] = self.memory.scorecard()
+            return result
+        except (ValueError, OSError, KeyError, TypeError, sqlite3.Error):
+            return {"status": "DATA_REQUIRED", "reason": "Memory settlement unavailable"}
 
     def evaluate(
         self,
@@ -649,7 +712,15 @@ class DailyCoordinator:
                     and guardrails.evidence_time(item["published_at"]) > now
                 ):
                     raise ValueError("Research publication is from the future")
+            try:
+                snapshot = technical.snapshot(technical.daily_bars(history, symbol, now))
+                if "technical-snapshot" not in ids:
+                    supplied = [*supplied, technical.evidence_item(symbol, snapshot)]
+            except (ValueError, KeyError, TypeError, sqlite3.Error):
+                snapshot = None
             context = {
+                "technical": snapshot,
+                "past_lessons": self.memory.lessons(symbol, now) if self.memory else [],
                 "run_id": run_id,
                 "symbol": symbol,
                 "as_of": self.review_cutoff.isoformat(),
@@ -672,35 +743,82 @@ class DailyCoordinator:
                     )
                 },
             }
+            settings_debate = self.config["debate"]
+            planned = len(agent_workflow.WORKFLOWS[self.config["review_workflow"]])
+            if settings_debate["enabled"]:
+                planned += debate.planned_calls(
+                    settings_debate["research_rounds"], settings_debate["risk_rounds"]
+                )
             if getattr(self.reviewer, "uses_network", False):
                 if not self.store.reserve_model_calls(
                     str(now.date()),
-                    len(agent_workflow.WORKFLOWS[self.config["review_workflow"]]),
+                    planned,
                     self.config["max_model_calls_per_day"],
                 ):
                     raise ValueError(
                         "Daily model-call budget exhausted; no automatic retry or limit increase"
                     )
-            reviewed = agent_runtime.run_reviews(
-                context,
-                self.reviewer,
-                emit=lambda event: self.store.event(run_id, event),
-                now=self.now,
-                resume_reports=self.store.handoffs(run_id, symbol),
-                checkpoint=lambda handoff: self.store.save_handoff(run_id, handoff),
-            )
-            result.update(proposal=proposal, agent_review=reviewed)
+            # Evidence reviews and the debate share the 120-second window, so run together.
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                review_job = pool.submit(
+                    agent_runtime.run_reviews,
+                    context,
+                    self.reviewer,
+                    emit=lambda event: self.store.event(run_id, event),
+                    now=self.now,
+                    resume_reports=self.store.handoffs(run_id, symbol),
+                    checkpoint=lambda handoff: self.store.save_handoff(run_id, handoff),
+                )
+                debate_job = (
+                    pool.submit(
+                        debate.run_debate,
+                        context,
+                        self.reviewer,
+                        settings_debate["research_rounds"],
+                        settings_debate["risk_rounds"],
+                        emit=lambda event: self.store.event(run_id, event),
+                        now=self.now,
+                    )
+                    if settings_debate["enabled"]
+                    else None
+                )
+                reviewed = review_job.result()
+                debated = debate_job.result() if debate_job else None
+            result.update(proposal=proposal, agent_review=reviewed, debate=debated)
+            if debated and debated["rating"] != debate.REVIEW:
+                result.update(rating=debated["rating"], conviction=debated["conviction"])
+                if self.memory:
+                    # Every rated call is scored later, including ones a veto stopped.
+                    self.memory.record(
+                        run_id,
+                        symbol,
+                        observed,
+                        debated["rating"],
+                        float(quote.ask),
+                        self.config["memory"]["horizon_sessions"],
+                        debated["conviction"],
+                        context["proposal_sha256"],
+                        (debated.get("decision") or {}).get("thesis", ""),
+                    )
             if reviewed["review"]["status"] != "REVIEW_COMPLETE":
                 result["reasons"] = reviewed["review"]["blockers"]
                 return result
+            if debated:
+                outcome, reasons = debate.verdict(debated)
+                if outcome != "PROCEED":
+                    result.update(decision=outcome, reasons=reasons)
+                    return result
             if read_book(self.path("book"))["state_sha256"] != book["state_sha256"]:
                 raise ValueError("Book changed during review; the ticket must be rebuilt")
             if (self.now() - observed).total_seconds() > 120:
                 raise ValueError("Quote expired during review; refresh the full decision")
-            result.update(
-                decision="BUY_PAPER_PROPOSAL",
-                reasons=["Frozen ticket passed accounting and fresh research review"],
-            )
+            reasons = ["Frozen ticket passed accounting and fresh research review"]
+            if debated:
+                reasons.append(
+                    f"Portfolio manager rated {debated['rating']} with "
+                    f"{debated['conviction']} conviction"
+                )
+            result.update(decision="BUY_PAPER_PROPOSAL", reasons=reasons)
             return result
         except (ValueError, TypeError, KeyError, InvalidOperation, OSError, sqlite3.Error) as exc:
             # Domain rejections are our own messages; supplied/provider text is never used here.

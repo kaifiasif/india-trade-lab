@@ -70,3 +70,29 @@ class MarketServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PrepareTests(unittest.TestCase):
+    def test_preparation_failures_are_reported_and_never_stop_the_run(self):
+        """A failed collector must leave the research run to refuse the entry itself."""
+        import datetime as dt
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from market_service import MarketService
+        from test_operations import build_project
+
+        IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+        with tempfile.TemporaryDirectory() as temporary:
+            now = dt.datetime(2026, 10, 26, 9, 36, tzinfo=IST)
+            config = build_project(Path(temporary), now)
+            worker = MarketService(config, now=lambda: now, prepare=True)
+            with (
+                patch("evidence.collect", side_effect=ValueError("news unavailable")),
+                patch("pretrade.build", side_effect=ValueError("no attestation")),
+            ):
+                prepared = worker.prepare_inputs(now)
+            self.assertEqual(prepared["evidence"]["status"], "DATA_BLOCK")
+            self.assertEqual(prepared["pretrade"]["status"], "DATA_BLOCK")
+            self.assertIn("news unavailable", prepared["evidence"]["reason"])

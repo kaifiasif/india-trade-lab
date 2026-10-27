@@ -34,9 +34,39 @@ def context():
 class FixtureReviewer:
     name = "offline_test_reviewer"
 
-    def __init__(self, veto=None):
+    def __init__(self, veto=None, rating="Buy", fail=()):
         self.veto = veto
+        self.rating = rating
+        self.fail = set(fail)
         self.observed = {}
+        self.transcripts = {}
+
+    def argue(self, role, system, user, schema):
+        """Offline debate participant: deterministic, cites the fixture evidence."""
+        payload = json.loads(user)
+        self.transcripts.setdefault(role, []).append(payload["transcript"])
+        if role in self.fail:
+            raise ValueError("Fixture failure")
+        result = {"role": role, "proposal_sha256": payload["proposal_sha256"]}
+        if role == "reflector":
+            return {"role": role, "lesson": "Fixture lesson."}
+        if role in ("research-manager", "portfolio-manager"):
+            result.update(rating=self.rating, evidence_ids=["fixture"])
+            if role == "research-manager":
+                result["rationale"] = "Fixture rationale"
+            else:
+                result.update(
+                    conviction="medium",
+                    thesis="Fixture thesis",
+                    invalidation="Close below the stop",
+                )
+            return result
+        result.update(
+            argument=f"{role} argument",
+            rebuttal="" if not payload["transcript"]["research"] else "Fixture rebuttal",
+            evidence_ids=["fixture"],
+        )
+        return result
 
     def review(self, role, current, reports):
         self.observed[role] = [report["role"] for report in reports]

@@ -442,7 +442,10 @@ class Engine:
             exit_result = self._maybe_exit(quote, now)
             if exit_result:
                 results.append(exit_result)
-        if self.phase in (Phase.SCANNING, Phase.IN_TRADE) and quote.symbol not in self.trades:
+        # The strategy sees every accepted quote, including while a position is open, so
+        # it can keep its own bar-grid state. The gate still refuses an entry in a symbol
+        # this engine already holds.
+        if self.phase in (Phase.SCANNING, Phase.IN_TRADE):
             entry_result = self._maybe_enter(quote, now)
             if entry_result:
                 results.append(entry_result)

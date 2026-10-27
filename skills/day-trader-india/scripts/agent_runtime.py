@@ -31,6 +31,19 @@ ROLE_PURPOSES = {
 }
 
 
+# Debate and memory roles. "quick" roles argue; "deep" roles judge or reflect.
+DEBATE_ROLES = {
+    "bull-researcher": "quick",
+    "bear-researcher": "quick",
+    "risk-aggressive": "quick",
+    "risk-conservative": "quick",
+    "risk-neutral": "quick",
+    "research-manager": "deep",
+    "portfolio-manager": "deep",
+    "reflector": "deep",
+}
+
+
 def review_prompt(role: str, context: dict, reports: list[dict]) -> tuple[str, str]:
     if role not in ROLE_PURPOSES:
         raise ValueError("Unsupported research role")
@@ -106,6 +119,9 @@ class OfflineReviewer:
             "proposal_sha256": context["proposal_sha256"],
         }
 
+    def argue(self, role: str, system: str, user: str, schema: dict) -> dict:
+        raise ValueError("No model reviewer configured; the debate cannot run")
+
 
 class OpenAIReviewer:
     """Official Responses API only; no tools, custom hosts, key logging or trade capability."""
@@ -137,24 +153,25 @@ class OpenAIReviewer:
         self.effort, self.max_output_tokens = effort, max_output_tokens
 
     def review(self, role: str, context: dict, reports: list[dict]) -> dict:
-        prompt, user = review_prompt(role, context, reports)
+        system, user = review_prompt(role, context, reports)
+        return self.structured(system, user, REPORT_SCHEMA, "research_handoff")
+
+    def structured(self, system: str, user: str, schema: dict, name: str) -> dict:
+        """One strict-JSON-schema completion; returns the object plus a provider receipt."""
         payload = {
             "model": self.model,
             "store": False,
             "max_output_tokens": self.max_output_tokens,
             "input": [
-                {"role": "system", "content": prompt},
-                {
-                    "role": "user",
-                    "content": user,
-                },
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
             ],
             "text": {
                 "format": {
                     "type": "json_schema",
-                    "name": "research_handoff",
+                    "name": name,
                     "strict": True,
-                    "schema": REPORT_SCHEMA,
+                    "schema": schema,
                 }
             },
         }
