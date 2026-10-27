@@ -74,7 +74,9 @@ class SelectionFixture:
     name = "offline_selection_fixture"
     uses_network = True
 
-    def __init__(self, picks=None, fail=(), outside=False, cross_cite=None):
+    def __init__(self, picks=None, fail=(), outside=False, cross_cite=None, risk=None, setup=None):
+        self.risk = risk or {}
+        self.setup = setup or {}
         self.picks = picks
         self.fail = set(fail)
         self.outside = outside
@@ -86,8 +88,23 @@ class SelectionFixture:
         self.seen[role] = {"system": system, "user": payload}
         if role in self.fail:
             raise ValueError("Fixture failure")
+        self.seen.setdefault("schemas", {})[role] = schema
+        if role in selection_agents.SUBAGENTS:
+            symbol = payload["symbol"]
+            self.seen.setdefault("subagent_calls", []).append((role, symbol))
+            base = {
+                "role": role,
+                "session_date": payload["session_date"],
+                "symbol": symbol,
+                "evidence_ids": [f"{symbol}#technical"],
+            }
+            if role == "risk-scout":
+                return {**base, "risk_level": self.risk.get(symbol, "low"), "risks": "Fixture"}
+            choices = schema["properties"]["strategy"]["enum"]
+            return {**base, "strategy": self.setup.get(symbol, choices[0]), "plan": "Fixture"}
         if role == selection_agents.JUDGE:
             stocks = payload["stocks"]
+            strategy = schema["properties"]["picks"]["items"]["properties"]["strategy"]["enum"][0]
             chosen = self.picks if self.picks is not None else [stocks[0]["symbol"]]
             if self.outside:
                 chosen = ["NSE:INVENTED"]
@@ -102,6 +119,7 @@ class SelectionFixture:
                         "conviction": "medium",
                         "reason": "Uptrend <b>with</b> sector support",
                         "evidence_ids": [f"{symbol}#technical"],
+                        "strategy": strategy,
                     }
                     for symbol in chosen
                 ],
@@ -215,7 +233,9 @@ class SelectionAgentTests(unittest.TestCase):
         result = selection_agents.run_selection(self.pool(), "2026-10-26", reviewer, 3)
         self.assertEqual(result["mode"], "judge")
         self.assertEqual(result["watching"], ["NSE:TCS"])
-        self.assertEqual(result["model_calls"], 7)
+        self.assertEqual(result["model_calls"], 13)
+        self.assertEqual(len(reviewer.seen["subagent_calls"]), 6)
+        self.assertEqual(result["judge"]["picks"][0]["strategy"], "orb-v1")
         self.assertEqual(set(result["specialists"]), set(selection_agents.SPECIALISTS))
         judge_view = reviewer.seen[selection_agents.JUDGE]["user"]["stocks"][0]["specialists"]
         self.assertEqual(set(judge_view), set(selection_agents.SPECIALISTS))
@@ -273,6 +293,53 @@ class SelectionAgentTests(unittest.TestCase):
         self.assertTrue(headline.startswith("Ignore previous"))
 
 
+class SubAgentTests(unittest.TestCase):
+    def pool(self):
+        return [candidate("NSE:INFY", 9.5), candidate("NSE:TCS", 8.0), candidate("NSE:WIPRO", 6.0)]
+
+    def test_a_high_risk_scout_or_no_setup_drops_the_judges_pick(self):
+        reviewer = SelectionFixture(
+            picks=["NSE:INFY", "NSE:TCS", "NSE:WIPRO"],
+            risk={"NSE:INFY": "high"},
+            setup={"NSE:TCS": "none"},
+        )
+        result = selection_agents.run_selection(self.pool(), "2026-10-26", reviewer, 3)
+        self.assertEqual(result["watching"], ["NSE:WIPRO"])
+        reasons = {item["symbol"]: item["dropped"] for item in result["judge"]["dropped"]}
+        self.assertIn("risk scout", reasons["NSE:INFY"])
+        self.assertIn("no proven setup", reasons["NSE:TCS"])
+
+    def test_the_judge_may_pick_only_finalists_and_only_proven_strategies(self):
+        proven = {"vwap-pullback-v1": {"description": "fixture"}}
+        reviewer = SelectionFixture(picks=["NSE:WIPRO"])
+        result = selection_agents.run_selection(
+            self.pool(), "2026-10-26", reviewer, 2, proven=proven, finalist_count=2
+        )
+        self.assertEqual(result["mode"], "deterministic")
+        self.assertIn("outside the filtered pool", result["reason"])
+        judge_schema = reviewer.seen["schemas"][selection_agents.JUDGE]
+        strategy = judge_schema["properties"]["picks"]["items"]["properties"]["strategy"]
+        self.assertEqual(strategy["enum"], ["vwap-pullback-v1"])
+        planner = reviewer.seen["schemas"]["setup-planner"]["properties"]["strategy"]
+        self.assertEqual(planner["enum"], ["vwap-pullback-v1", "none"])
+
+    def test_nothing_proven_means_the_desk_sits_out_without_model_calls(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            config = PremarketTests().project(directory)
+            (directory / "strategy-scorecard.json").write_text(
+                json.dumps(
+                    {"as_of": NOW.isoformat(), "strategies": {"orb-v1": {"eligible": False}}}
+                )
+            )
+            reviewer = SelectionFixture()
+            report = premarket.build(config, NOW, reviewer=reviewer)
+            self.assertEqual(report["selection"]["mode"], "sit_out")
+            self.assertEqual(report["watching"], [])
+            self.assertEqual(reviewer.seen, {})
+            self.assertIn("sits out", premarket.render(report))
+
+
 class PremarketTests(unittest.TestCase):
     def project(self, directory, tier_file=LARGE):
         config = build_project(directory, NOW)
@@ -302,7 +369,7 @@ class PremarketTests(unittest.TestCase):
             self.assertIn("Final call: judge", page)
             with sqlite3.connect(Path(temporary) / "decisions.sqlite") as conn:
                 used = conn.execute("SELECT calls FROM model_budget").fetchone()[0]
-            self.assertEqual(used, 7)
+            self.assertEqual(used, 9)
 
     def test_a_stock_below_the_size_minimum_never_reaches_the_agents(self):
         with tempfile.TemporaryDirectory() as temporary:

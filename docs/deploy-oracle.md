@@ -14,7 +14,7 @@ month with Claude.
 |---|---|---|
 | 08:40 | NSE reference refresh, news collection (Google News, NSE filings, ET Markets), pre-market report emailed to you | No |
 | 09:05–15:50 | Research worker: live Kite quotes and candles, agent reviews and debates; with the autopilot on, it records approved paper entries and exits itself | Yes |
-| 16:10 | Today's completed session saved into history | Yes |
+| 16:10 | Today's completed session saved into history, then the strategy tournament re-run, so tomorrow trades only what is still proven | Yes |
 | Always | Dashboard on the server's loopback, reached through an SSH tunnel | No |
 
 Jobs skip themselves on days that are not in `sessions.json`.
@@ -131,10 +131,14 @@ curl -fsSL -A "Mozilla/5.0" -o ~/EQUITY_L.csv \
 python3 scripts/make_universe.py --equity-list ~/EQUITY_L.csv \
   --symbols INFY,TCS,RELIANCE --output data/observatory/universe.json
 python3 scripts/data_sync.py --config data/observatory/pipeline.json --days 180 --max-symbols 3
+python3 scripts/tournament.py --config data/observatory/pipeline.json
 python3 scripts/preflight.py --config data/observatory/pipeline.json
 ```
 
-The symbols are examples, not recommendations. If NSE refuses the `curl` from a
+The tournament reports which strategies are eligible. If none are, the desk
+sits out until one proves itself (see
+[strategy.md](../skills/day-trader-india/references/strategy.md)). The symbols are
+examples, not recommendations. If NSE refuses the `curl` from a
 cloud server, download `EQUITY_L.csv` on your phone and upload it to `~/` with
 Termius's SFTP. The stock list expires after 30 days, so rebuild it monthly.
 

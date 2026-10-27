@@ -33,12 +33,25 @@ from typing import Any
 
 from agent_runtime import SELECTION_ROLES
 
+import strategies
+
 RATINGS = ("Buy", "Overweight", "Hold", "Underweight", "Sell")
 PICK_RATINGS = ("Buy", "Overweight")
 STANCES = ("positive", "neutral", "negative", "insufficient")
 CONVICTIONS = ("low", "medium", "high")
-SPECIALISTS = tuple(role for role, tier in SELECTION_ROLES.items() if tier == "quick")
+SPECIALISTS = (
+    "news-analyst",
+    "sentiment-analyst",
+    "technical-analyst",
+    "sector-analyst",
+    "liquidity-analyst",
+    "brokerage-analyst",
+)
+SUBAGENTS = ("risk-scout", "setup-planner")
 JUDGE = "selection-judge"
+RISK_LEVELS = ("low", "medium", "high")
+NO_SETUP = "none"
+assert set(SPECIALISTS) | set(SUBAGENTS) | {JUDGE} == set(SELECTION_ROLES)
 MAX_SUMMARY = 400
 MAX_REASON = 700
 MAX_HEADLINES = 8
@@ -135,6 +148,56 @@ JUDGE_SCHEMA = {
     "required": ["role", "session_date", "summary", "picks"],
     "additionalProperties": False,
 }
+
+
+SUBAGENT_BRIEFS = {
+    "risk-scout": (
+        "You are a sub-agent of the selection judge, sent to find what could make a long "
+        "position in this one stock lose money today: an event or result due, a gap risk, an "
+        "overextended move, a weak sector, a broker downgrade, thin evidence. Rate the risk "
+        "low, medium or high. High means the judge should not pick it."
+    ),
+    "setup-planner": (
+        "You are a sub-agent of the selection judge, sent to say which of the desk's proven "
+        "intraday strategies fits this one stock today, and what would have to happen at the "
+        "open for it to trigger. Choose only from the listed strategies, or 'none' if none "
+        "fits. Do not invent price levels that are not in the evidence."
+    ),
+}
+
+
+def subagent_schema(role: str, proven: list[str]) -> dict:
+    if role == "risk-scout":
+        extra = {
+            "risk_level": {"type": "string", "enum": list(RISK_LEVELS)},
+            "risks": {"type": "string"},
+        }
+    else:
+        extra = {
+            "strategy": {"type": "string", "enum": [*proven, NO_SETUP]},
+            "plan": {"type": "string"},
+        }
+    properties = {
+        "role": {"type": "string"},
+        "session_date": {"type": "string"},
+        "symbol": {"type": "string"},
+        **extra,
+        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    }
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": list(properties),
+        "additionalProperties": False,
+    }
+
+
+def judge_schema(proven: list[str]) -> dict:
+    schema = json.loads(json.dumps(JUDGE_SCHEMA))
+    item = schema["properties"]["picks"]["items"]
+    item["properties"]["strategy"] = {"type": "string", "enum": proven or [NO_SETUP]}
+    item["required"].append("strategy")
+    return schema
 
 
 def _text(value: object, field: str, limit: int) -> str:
@@ -281,12 +344,90 @@ def validate_assessment(
     return result
 
 
+def finalists_of(pool: list[dict], specialists: dict[str, dict], count: int) -> list[str]:
+    """Stocks the judge deep-dives: most specialist support, then the deterministic score."""
+
+    def support(candidate: dict) -> tuple:
+        symbol = candidate["symbol"]
+        stances = [
+            view["assessments"][symbol]["stance"]
+            for view in specialists.values()
+            if view["status"] == "ok" and symbol in view["assessments"]
+        ]
+        return (
+            stances.count("positive") - stances.count("negative"),
+            candidate["score"]["total"],
+        )
+
+    return [item["symbol"] for item in sorted(pool, key=support, reverse=True)[:count]]
+
+
+def subagent_prompt(
+    role: str, session: str, candidate: dict, catalogue: dict, specialists: dict, proven: dict
+) -> tuple[str, str]:
+    symbol = candidate["symbol"]
+    system = f"{BASE_RULES}\n\nYour role: {role}. {SUBAGENT_BRIEFS[role]}"
+    payload: dict[str, Any] = {
+        "role": role,
+        "session_date": session,
+        "symbol": symbol,
+        "name": candidate["name"],
+        "task": "Answer for this one stock only. Cite its evidence IDs. Under 80 words.",
+        "specialists": {
+            name: view["assessments"].get(symbol)
+            for name, view in specialists.items()
+            if view["status"] == "ok"
+        },
+        "evidence": {key: item["facts"] for key, item in catalogue.items()},
+    }
+    if role == "setup-planner":
+        payload["proven_strategies"] = proven
+    return system, json.dumps(payload, default=str)
+
+
+def validate_subagent(
+    role: str, raw: object, session: str, symbol: str, catalogue: dict, proven: list[str]
+) -> dict:
+    if (
+        not isinstance(raw, dict)
+        or raw.get("role") != role
+        or raw.get("session_date") != session
+        or raw.get("symbol") != symbol
+    ):
+        raise ValueError("Sub-agent answer does not match its assignment")
+    ids = raw.get("evidence_ids")
+    if (
+        not isinstance(ids, list)
+        or len(ids) > 20
+        or len(set(ids)) != len(ids)
+        or any(item not in catalogue for item in ids)
+    ):
+        raise ValueError("Sub-agent cited evidence outside its stock")
+    if role == "risk-scout":
+        if raw.get("risk_level") not in RISK_LEVELS:
+            raise ValueError("Unknown risk level")
+        return {
+            "risk_level": raw["risk_level"],
+            "risks": _text(raw.get("risks"), "risks", MAX_SUMMARY),
+            "evidence_ids": ids,
+        }
+    if raw.get("strategy") not in [*proven, NO_SETUP]:
+        raise ValueError("Setup planner chose a strategy that is not proven")
+    return {
+        "strategy": raw["strategy"],
+        "plan": _text(raw.get("plan"), "plan", MAX_SUMMARY),
+        "evidence_ids": ids,
+    }
+
+
 def judge_prompt(
     session: str,
     pool: list[dict],
     catalogues: dict,
     specialists: dict[str, dict],
     max_picks: int,
+    finalists: dict[str, dict] | None = None,
+    proven: dict | None = None,
 ) -> tuple[str, str]:
     system = (
         f"{BASE_RULES}\n\nYour role: {JUDGE}. You make the final call on which stocks the desk "
@@ -294,7 +435,9 @@ def judge_prompt(
         "specialist marked unavailable gave no view, which is not a neutral view. Pick only "
         "stocks with a long case strong enough to watch, rated Buy or Overweight; picking "
         "fewer, or none, is a correct answer on a weak day. Every stock offered already passed "
-        "the desk's liquidity, size and history filters. Explain each pick in under 80 words."
+        "the desk's liquidity, size and history filters. Explain each pick in under 80 words. "
+        "You may pick only finalists: your sub-agents (a risk scout and a setup planner) have "
+        "examined each one. For every pick, name the proven strategy to trade it with."
     )
     stocks = []
     for candidate in pool:
@@ -321,6 +464,8 @@ def judge_prompt(
                     for role, view in specialists.items()
                 },
                 "evidence": {key: item["facts"] for key, item in catalogues[symbol].items()},
+                "finalist": symbol in (finalists or {}),
+                "sub_agents": (finalists or {}).get(symbol),
             }
         )
     user = json.dumps(
@@ -328,7 +473,8 @@ def judge_prompt(
             "role": JUDGE,
             "session_date": session,
             "max_picks": max_picks,
-            "task": f"Pick at most {max_picks} stocks to watch. Cite evidence IDs for each.",
+            "proven_strategies": proven or {},
+            "task": f"Pick at most {max_picks} finalists to watch. Cite evidence IDs for each.",
             "stocks": stocks,
         },
         default=str,
@@ -337,7 +483,12 @@ def judge_prompt(
 
 
 def validate_judgement(
-    raw: object, session: str, pool: list[str], catalogues: dict, max_picks: int
+    raw: object,
+    session: str,
+    pool: list[str],
+    catalogues: dict,
+    max_picks: int,
+    proven: list[str] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(raw, dict) or raw.get("role") != JUDGE or raw.get("session_date") != session:
         raise ValueError("Judgement does not match its role or session")
@@ -362,6 +513,8 @@ def validate_judgement(
             or any(item not in catalogues[symbol] for item in ids)
         ):
             raise ValueError("A pick must cite that stock's own evidence")
+        if proven is not None and pick.get("strategy") not in proven:
+            raise ValueError("A pick must name a proven strategy")
         seen.add(symbol)
         chosen.append(
             {
@@ -370,6 +523,7 @@ def validate_judgement(
                 "conviction": pick["conviction"],
                 "reason": _text(pick.get("reason"), "reason", MAX_REASON),
                 "evidence_ids": ids,
+                **({"strategy": pick["strategy"]} if proven is not None else {}),
             }
         )
     result = {"summary": _text(raw.get("summary"), "summary", MAX_REASON), "picks": chosen}
@@ -397,6 +551,8 @@ def run_selection(
     max_picks: int,
     reserve: Callable[[int], bool] | None = None,
     min_specialists: int = 4,
+    proven: dict[str, dict] | None = None,
+    finalist_count: int = 3,
 ) -> dict[str, Any]:
     """Run six specialists concurrently, then the judge. Falls back, labelled, on any failure.
 
@@ -424,7 +580,13 @@ def run_selection(
             specialists={},
             model_calls=0,
         )
-    planned = len(SPECIALISTS) + 1
+    finalist_count = max(1, min(finalist_count, len(pool), 5))
+    if proven is None:
+        proven = {
+            name: {"description": strategies.DESCRIPTIONS[name]} for name in strategies.STRATEGIES
+        }
+    names = list(proven)
+    planned = len(SPECIALISTS) + len(SUBAGENTS) * finalist_count + 1
     if reserve is not None and not reserve(planned):
         return _fallback(
             pool,
@@ -467,10 +629,35 @@ def run_selection(
             specialists=specialists,
             model_calls=len(SPECIALISTS),
         )
-    system, user = judge_prompt(session, pool, catalogues, specialists, max_picks)
+    # The judge spawns two sub-agents per finalist, all at once, before deciding.
+    chosen = finalists_of(pool, specialists, finalist_count)
+    by_symbol = {item["symbol"]: item for item in pool}
+    finalists: dict[str, dict] = {symbol: {} for symbol in chosen}
+
+    def scout(role: str, symbol: str) -> dict:
+        system, user = subagent_prompt(
+            role, session, by_symbol[symbol], catalogues[symbol], specialists, proven or {}
+        )
+        raw = reviewer.argue(role, system, user, subagent_schema(role, names))
+        return validate_subagent(role, raw, session, symbol, catalogues[symbol], names)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2 * len(chosen)) as runner:
+        jobs = {
+            (role, symbol): runner.submit(scout, role, symbol)
+            for symbol in chosen
+            for role in SUBAGENTS
+        }
+        for (role, symbol), job in jobs.items():
+            try:
+                finalists[symbol][role] = job.result()
+            except (ValueError, OSError, KeyError, TypeError, AttributeError):
+                finalists[symbol][role] = {"status": "unavailable"}
+    system, user = judge_prompt(
+        session, pool, catalogues, specialists, max_picks, finalists, proven
+    )
     try:
-        raw = reviewer.argue(JUDGE, system, user, JUDGE_SCHEMA)
-        judgement = validate_judgement(raw, session, symbols, catalogues, max_picks)
+        raw = reviewer.argue(JUDGE, system, user, judge_schema(names))
+        judgement = validate_judgement(raw, session, chosen, catalogues, max_picks, names)
     except (ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
         reason = str(exc) if isinstance(exc, ValueError) else "the judge call failed"
         return _fallback(
@@ -480,11 +667,24 @@ def run_selection(
             specialists=specialists,
             model_calls=planned,
         )
+    # Downgrade only: a pick the risk scout rated high, or with no fitting setup, is dropped.
+    kept, dropped = [], []
+    for pick in judgement["picks"]:
+        reports = finalists.get(pick["symbol"], {})
+        if (reports.get("risk-scout") or {}).get("risk_level") == "high":
+            dropped.append({**pick, "dropped": "its risk scout rated the risk high"})
+        elif (reports.get("setup-planner") or {}).get("strategy") == NO_SETUP:
+            dropped.append({**pick, "dropped": "its setup planner found no proven setup"})
+        else:
+            kept.append(pick)
+    judgement = {**judgement, "picks": kept, "dropped": dropped}
     return {
         "mode": "judge",
-        "reason": "the selection judge made the final call from the specialists' assessments",
+        "reason": "the selection judge made the final call after its sub-agents examined "
+        "each finalist",
         "pool": symbols,
-        "watching": [pick["symbol"] for pick in judgement["picks"]],
+        "finalists": finalists,
+        "watching": [pick["symbol"] for pick in kept],
         "judge": judgement,
         "specialists": specialists,
         "model_calls": planned,

@@ -42,6 +42,7 @@ from history import HistoryStore
 
 import selection_agents
 import sentiment
+import strategies
 from reference import ReferenceStore
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -267,7 +268,36 @@ def build(
         item["rank"] = rank
     pool = [item for item in candidates if item["eligible"]][: chooser["pool"]]
     session = str(clock.date())
-    if chooser["agents"]:
+    playbook = strategies.allowed_for(
+        coordinator.config_path.parent, coordinator.config["strategy"], "", session
+    )
+    proven = {}
+    try:
+        card = json.loads(
+            strategies.scorecard_path(coordinator.config_path.parent).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        card = {}
+    for name in playbook["allowed"]:
+        result = (card.get("strategies") or {}).get(name) or {}
+        proven[name] = {
+            "description": strategies.DESCRIPTIONS[name],
+            "tournament_doubled_costs": {
+                key: (result.get("doubled_costs") or {}).get(key)
+                for key in ("trades", "net_inr", "win_rate_pct", "profit_factor")
+            },
+        }
+    if not playbook["allowed"]:
+        selection = {
+            "mode": "sit_out",
+            "reason": playbook["basis"],
+            "pool": [item["symbol"] for item in pool],
+            "watching": [],
+            "judge": None,
+            "specialists": {},
+            "model_calls": 0,
+        }
+    elif chooser["agents"]:
         selection = selection_agents.run_selection(
             pool,
             session,
@@ -277,6 +307,8 @@ def build(
                 session, count, coordinator.config["max_model_calls_per_day"]
             ),
             min_specialists=chooser["min_specialists"],
+            proven=proven,
+            finalist_count=chooser["finalists"],
         )
     else:
         selection = {
@@ -307,8 +339,10 @@ def build(
         "mode": "pre_market_research",
         "watching": selection["watching"],
         "selection": {
-            key: selection.get(key) for key in ("mode", "reason", "pool", "judge", "model_calls")
+            key: selection.get(key)
+            for key in ("mode", "reason", "pool", "judge", "model_calls", "finalists")
         }
+        | {"strategies": proven, "strategy_basis": playbook["basis"]}
         | {
             "specialists": {
                 role: {
@@ -375,7 +409,8 @@ def render(report: dict) -> str:
         pick = item.get("judge_pick")
         verdict = (
             f'<p class="pick"><strong>Judge: {esc(pick["rating"])}, {esc(pick["conviction"])} '
-            f"conviction.</strong> {esc(pick['reason'])}</p>"
+            f"conviction, trade with {esc(pick.get('strategy'))}.</strong> "
+            f"{esc(pick['reason'])}</p>"
             if pick
             else '<p class="pick">On the watchlist by deterministic rank.</p>'
             if item["watch"]
@@ -390,6 +425,27 @@ def render(report: dict) -> str:
             f"<tr><td>{esc(role)}</td><td><span class='stance {esc(view['stance'])}'>"
             f"{esc(view['stance'])}</span></td><td>{esc(view['summary'])}</td></tr>"
             for role, view in item.get("agent_views", {}).items()
+        )
+        scouts = (report["selection"].get("finalists") or {}).get(item["symbol"]) or {}
+        risk = scouts.get("risk-scout") or {}
+        setup = scouts.get("setup-planner") or {}
+        subagents = (
+            "<h4>Judge's sub-agents</h4><ul>"
+            + (
+                f"<li>Risk scout: <strong>{esc(risk.get('risk_level'))}</strong> — "
+                f"{esc(risk.get('risks'))}</li>"
+                if risk.get("risk_level")
+                else "<li>Risk scout: unavailable</li>"
+            )
+            + (
+                f"<li>Setup planner: <strong>{esc(setup.get('strategy'))}</strong> — "
+                f"{esc(setup.get('plan'))}</li>"
+                if setup.get("strategy")
+                else "<li>Setup planner: unavailable</li>"
+            )
+            + "</ul>"
+            if scouts
+            else ""
         )
         sector = item["sector"]
         sector_line = (
@@ -416,6 +472,7 @@ Last close INR {esc(technicals["close"])} on {esc(technicals["session"])}; 5-ses
 {esc(mood["headlines"])} collected ({esc(mood["confidence"])} confidence).</p>
 {f"<h4>Broker calls stated in headlines</h4><ul>{calls}</ul>" if calls else ""}
 {f"<h4>Recent headlines</h4><ul>{headlines}</ul>" if headlines else ""}
+{subagents}
 {f"<h4>Specialist agents</h4><table><tr><th>Agent</th><th>Stance</th><th>Assessment</th></tr>{views}</table>" if views else ""}
 <details><summary>How this rank was scored</summary>
 <table><tr><th>Factor</th><th>Points</th><th>Reason</th></tr>{factors}</table></details>
@@ -431,12 +488,27 @@ Last close INR {esc(technicals["close"])} on {esc(technicals["session"])}; 5-ses
         for role, view in chosen.get("specialists", {}).items()
     )
     limits = chosen["filters"]
+    proven = chosen.get("strategies") or {}
+    playbook = "".join(
+        f"<li><strong>{esc(name)}</strong>: {esc(item['description'])} — tournament at double "
+        f"costs: {esc(item['tournament_doubled_costs'].get('trades'))} trades, net "
+        f"{_rupees(item['tournament_doubled_costs'].get('net_inr'))}, profit factor "
+        f"{esc(item['tournament_doubled_costs'].get('profit_factor'))}</li>"
+        for name, item in proven.items()
+    )
+    dropped = "".join(
+        f"<li>{esc(item['symbol'])}: {esc(item['dropped'])}</li>"
+        for item in (judge.get("dropped") or [])
+    )
     panel = f"""<div class="card judge"><h3>Final call: {esc(chosen["mode"])}</h3>
 <p>{esc(chosen["reason"])}.</p>
 {f"<p><strong>Judge:</strong> {esc(judge['summary'])}</p>" if judge.get("summary") else ""}
 <p class="meta">Hard filters: {esc(limits["min_market_cap_tier"])} cap or bigger, traded value at least
 {_rupees(limits["min_turnover_inr"])}, reference data at most {esc(limits["max_reference_age_days"])} days old.
 Pool: {esc(", ".join(chosen["pool"] or []) or "empty")} · model calls {esc(chosen["model_calls"])}</p>
+<h4>Strategies allowed today</h4>
+{f"<ul>{playbook}</ul>" if playbook else f"<p>None. {esc(chosen.get('strategy_basis'))}.</p>"}
+{f"<h4>Dropped by sub-agents</h4><ul>{dropped}</ul>" if dropped else ""}
 {f"<h4>Agents</h4><ul>{agents}</ul>" if agents else ""}</div>"""
     blocked = "".join(
         f"<li>{esc(item['symbol'])}: {esc(item['reason'])}</li>" for item in report["blocked"]

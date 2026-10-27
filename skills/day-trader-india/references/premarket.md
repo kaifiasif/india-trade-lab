@@ -32,9 +32,15 @@ it, but no derivative position is sized or placed.
    citing evidence IDs from that slice only:
    `news-analyst`, `sentiment-analyst`, `technical-analyst`, `sector-analyst`,
    `liquidity-analyst`, `brokerage-analyst`.
-3. **Selection judge (final call).** Reads every assessment, the deterministic
+3. **Sub-agents.** For up to three finalists, the judge spawns a risk scout
+   (low, medium or high risk today) and a setup planner (which proven strategy
+   fits, or none). Code drops any pick rated high risk or with no setup. See
+   [strategy.md](strategy.md).
+4. **Selection judge (final call).** Reads every assessment, the deterministic
    score and the evidence, then picks at most `max_candidates` stocks rated Buy
-   or Overweight, with conviction and a cited reason. Picking none is allowed.
+   or Overweight, with conviction, a cited reason and the proven strategy to
+   trade it with. Picking none is allowed. When the tournament has proven no
+   strategy, the report says `sit_out` and no model calls are made.
 
 Guards around the judge: it can pick only from the filtered pool, at most the
 configured number, citing each stock's own evidence. It cannot add a stock,

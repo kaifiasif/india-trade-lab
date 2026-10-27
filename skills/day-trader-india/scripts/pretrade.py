@@ -32,10 +32,12 @@ from pathlib import Path
 from typing import Any
 
 import guardrails
+import technical
 from history import HistoryStore
 
 import india_research
 import paper_book
+import strategies
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 JUDGEMENT = ("surveillance_clear", "no_material_event")
@@ -81,6 +83,8 @@ def derive(
     sessions: dict,
     now: dt.datetime,
     min_turnover_inr: float,
+    allowed: list[str] | tuple[str, ...] = (strategies.ORB,),
+    filters: bool = True,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     """Return (sources for machine checks, derived facts). Any failure raises Refused."""
     instrument = _instrument(universe, symbol)
@@ -158,27 +162,34 @@ def derive(
         f"({sector or 'sector not declared in the instrument master'})"
     )
 
-    # strategy_rule_met: the breakout confirmed on the latest completed bar.
+    # strategy_rule_met: an allowed strategy fired on the latest completed bar, after the
+    # loss-avoidance filters. The coordinator evaluates the identical rule and filters.
     rows = [row for row in bars if row["symbol"] == symbol]
     completed, times = india_research.checked_session(rows, sessions, now.date(), now)
-    signal = india_research.first_signal(completed, times)
+    if not allowed:
+        raise Refused("no strategy is allowed today (none proven in the tournament)")
+    context = None
+    if filters:
+        try:
+            context = technical.snapshot(technical.daily_bars(history, symbol, now))
+        except (ValueError, KeyError, TypeError, sqlite3.Error):
+            context = None
+    signal = strategies.latest_signal(completed, times, list(allowed), context)
     if signal is None:
-        raise Refused("no completed-bar opening-range breakout at this cutoff")
-    latest = (completed[-1]["t"] + india_research.BAR).isoformat()
-    if signal["confirmed_at"] != latest:
-        raise Refused(f"breakout confirmed at {signal['confirmed_at']}, not on the latest bar")
+        raise Refused(f"no {', '.join(allowed)} setup on the latest completed bar")
+    if "blocked" in signal:
+        raise Refused("setup filtered out: " + "; ".join(signal["blocked"]))
     sources["strategy_rule_met"] = (
-        f"intraday-orb-v1: close {signal['signal_close']} above the opening range high "
-        f"{signal['range_high']}, confirmed at {signal['confirmed_at']}"
+        f"{signal['version']}: {signal['reason']}, confirmed at {signal['confirmed_at']}"
     )
 
     # stop_target_reviewed: the frozen plan is coherent and inside the per-trade cap.
-    stop = Decimal(str(signal["range_low"]))
+    stop = Decimal(str(signal["stop"]))
     if not stop < bid:
-        raise Refused("the opening-range low is not below the current bid")
+        raise Refused("the strategy stop is not below the current bid")
     risk_cap = paper_book.number(book["limits"]["risk"], True)
     sources["stop_target_reviewed"] = (
-        f"stop at the opening-range low INR {stop} below the bid INR {bid}; "
+        f"{signal['version']} stop at INR {stop} below the bid INR {bid}; "
         f"per-trade planned loss capped at INR {risk_cap} by the journal"
     )
     facts = {
@@ -253,6 +264,8 @@ def build(
             sources, facts = derive(
                 symbol, universe, quote, book, history, bars, sessions, clock,
                 float(coordinator.config["min_turnover_inr"]),
+                coordinator.playbook(symbol, clock)["allowed"],
+                coordinator.config["strategy"]["filters"],
             )  # fmt: skip
         except (Refused, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             refused[symbol] = str(exc)

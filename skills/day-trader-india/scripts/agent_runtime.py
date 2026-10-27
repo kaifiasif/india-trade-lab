@@ -51,6 +51,9 @@ SELECTION_ROLES = {
     "sector-analyst": "quick",
     "liquidity-analyst": "quick",
     "brokerage-analyst": "quick",
+    # Sub-agents the judge spawns for each finalist before its final call.
+    "risk-scout": "quick",
+    "setup-planner": "quick",
     "selection-judge": "deep",
 }
 MODEL_ROLES = {**DEBATE_ROLES, **SELECTION_ROLES}

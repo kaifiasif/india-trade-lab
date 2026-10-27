@@ -45,8 +45,11 @@ case "$job" in
   market)
     exec python3 scripts/market_service.py --config "$CONFIG" --refresh-india --prepare ;;
   aftermarket)
-    # Today's completed session into history, while today's Kite token is still valid.
-    exec python3 scripts/data_sync.py --config "$CONFIG" --days 90 --max-symbols 3 ;;
+    # Today's completed session into history, while today's Kite token is still valid,
+    # then re-run the strategy tournament so tomorrow trades only what is still proven.
+    python3 scripts/data_sync.py --config "$CONFIG" --days 90 --max-symbols 3 \
+      || echo "History sync failed; the tournament will use the history already stored."
+    exec python3 scripts/tournament.py --config "$CONFIG" ;;
   *)
     echo "Usage: run.sh premarket | market | aftermarket | observatory" >&2
     exit 64 ;;

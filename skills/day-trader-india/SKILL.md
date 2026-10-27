@@ -206,6 +206,14 @@ selection judge makes the final call. Without a model it uses the deterministic
 rank and says so. F&O lots are shown; only cash equity is traded. Read
 [premarket.md](references/premarket.md).
 
+## Strategies, exits and the tournament
+
+`scripts/strategies.py` holds the entry rules (opening-range breakout, VWAP
+pullback), the loss-avoidance filters and managed exits (breakeven, trailing and
+time stops). `scripts/tournament.py` replays them on stored history with
+pessimistic fills and lets a strategy trade only if it is profitable at double
+costs; otherwise the desk sits out. Read [strategy.md](references/strategy.md).
+
 ## Check the setup before trusting a run
 
 `scripts/preflight.py` checks each prerequisite separately and names the exact
