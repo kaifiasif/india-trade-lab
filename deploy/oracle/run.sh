@@ -10,7 +10,10 @@ CONFIG="$DATA/pipeline.json"
 cd "$REPO"
 
 # Secrets (SMTP_PASSWORD, model API key, KITE_API_KEY/SECRET) and today's Kite token.
-for file in "$HOME/.india-trade-lab.secrets" "$HOME/.india-trade-lab.env"; do
+# Keys and the Kite token saved from the dashboard live in ~/.config/india-trade-lab/.
+STORE="${ITL_CONFIG_DIR:-$HOME/.config/india-trade-lab}"
+for file in "$HOME/.india-trade-lab.secrets" "$HOME/.india-trade-lab.env" \
+            "$STORE/secrets.env" "$STORE/tokens.env"; do
   # shellcheck disable=SC1090
   [ -f "$file" ] && source "$file"
 done

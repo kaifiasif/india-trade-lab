@@ -6,30 +6,46 @@ Requires Python 3.10+. From the repository root:
 python3 scripts/observatory.py
 ```
 
-Open `http://127.0.0.1:8765`. No npm install or broker credentials are needed.
-The UI and Python backend ship together in the portable `day-trader-india` skill.
+Open `http://127.0.0.1:8765`. No npm install or broker credentials are needed
+to run it: the React app is prebuilt into `assets/observatory/`, and the UI and
+Python backend ship together in the portable `day-trader-india` skill.
 
-## What the dashboard shows
+## Pages
 
-| View | Source |
+| Page | What it shows or does |
 | --- | --- |
-| 3D/flat funnel | Persisted data, strategy, gate, paper executor and journal events. In 3D, each newly recorded event travels as a particle between the stages it reached; blocked events turn red and drop at the stage that stopped them |
-| Session tape | The replay's recorded bids as a 3D ribbon, with each paper fill and the planned stop and target while the position was open |
-| Decision inspector | Recorded explanations and event payloads, not private model reasoning |
-| Trade calls | Assumed entry/exit fills, rejected orders, quantity, stop and target |
-| Activity stream | Filterable decisions, observations, blocks and alerts |
-| History coverage | Retained complete sessions, source kind and a 50-session research baseline |
-| Specialist bench | Idle portable research skills; no LLM providers are connected |
+| Today | Greeting, setup progress, the paper book, today's picks, the IST session timeline and the strategy tournament |
+| Pre-market desk | The judge's picks and drops, each specialist's one-line view, and buttons to run news, the report (with or without email) and the tournament |
+| Paper replay | A synthetic NSE:DEMO session through the real engine: five pipeline stages, the price with fills, stop and target, paper calls and engine events, with pause and halt |
+| Research | Recorded research reviews, how past ratings settled, history coverage and the screened watchlist |
+| Agents | The sixteen-member desk and what each one is allowed to do |
+| Setup | Eleven steps from an empty server to a working desk (below) |
+| Settings | Every editable `pipeline.json` setting, in tabs, saved atomically with a backup |
 
-The 3D views use Three.js 0.170.0, bundled under
-`assets/observatory/vendor/` with its licence and checksum, so the page still
-loads nothing from outside your computer. Drag a scene to turn it and
-double-click to reset. Without WebGL, the page uses the flat funnel and the
-tables; with reduced motion, nothing animates but every value is still shown.
-The 3D views only draw recorded events and prices.
+Light and dark themes follow the system and can be switched from the header.
+The mascots are SVG moved with GSAP; their moods follow recorded events (asleep
+when the desk sits out, a hop on a new pick or fill, an alarm on a block). With
+reduced motion they hold still and every value is still shown.
 
-To turn a recorded session into a shareable video, see the
-[recap video](../recap-video/README.md).
+## Setup from the browser
+
+Setup walks through: the private project, your name and report address, Kite
+Connect keys, today's Kite login (open Zerodha, paste the address it returns
+to), email, the research model, choosing one to three stocks from NSE's
+`EQUITY_L.csv`, loading history, the tournament, the paper book and today's
+surveillance and announcement checks. Long tasks run as server jobs with a live
+log; one job per kind runs at a time and a restart marks unfinished jobs as
+interrupted.
+
+Email goes out over SMTP from your own mailbox (for Gmail, `smtp.gmail.com`
+with a 16-character app password). There is no Google sign-in.
+
+Secrets (Kite key and secret, today's token, the SMTP password, model keys) are
+written to `~/.config/india-trade-lab/secrets.env` and `tokens.env`, folder mode
+0700 and files 0600, or under `ITL_CONFIG_DIR` if set. They are never written to
+`pipeline.json`, never returned by the API (only "saved, ends 1234"), and are
+scrubbed from job logs. Every setup action is recorded in `setup-audit.jsonl`
+without values.
 
 Run a normal replay, a missing-bar scenario or an oversized-proposal scenario.
 All use made-up `NSE:DEMO` data. Replays run automatically through the actual
@@ -67,21 +83,26 @@ archived. Two days is insufficient for this project's configured research gate;
 - `GET /api/session`: process-local replay-control token.
 - `POST /api/replay`: `{"scenario":"baseline"}`; also `data-gap` or `risk-block`.
 - `POST /api/control`: `{"action":"pause"}`, `resume` or `halt`.
+- `GET /api/health`, `GET /api/setup/status`, `GET /api/setup/settings`,
+  `GET /api/setup/jobs[/<id>?offset=N]`.
+- `POST /api/setup/<action>`: `init_project`, `save_profile`, `save_secret`,
+  `kite_login_url`, `kite_exchange`, `send_test_email`, `save_settings`,
+  `upload_equity_list`, `search_symbols`, `build_universe`, `create_book`,
+  `attest`, `run_job`.
 
 POST requires `Content-Type: application/json` and the `X-Session-Token` returned
 by `/api/session`. Requests must use the expected loopback host and same origin.
-The server provides no arbitrary-file, exchange-order or credential endpoints.
+The server provides no arbitrary-file or exchange-order endpoints, and no endpoint returns a stored secret.
 It is a local application server, not an authenticated internet deployment.
 
 Use `--data-dir` to select private persistent storage and `--port` for another
-local port. Back up the history database and each run database. A hosted static
-preview can be exported with `--export-preview FILE`; it contains synthetic
-replay events, has no connected backend, and its run controls point to local setup.
+local port. Back up the history database and each run database.
+`--export-preview FILE` writes the latest synthetic state as JSON (used by the
+recap video).
 The daily research desk reads saved coordinator handoffs, final proposals,
 worker routes and read-only crypto snapshots when present. See
 [daily service setup](../skills/day-trader-india/references/daily-service.md).
 Model reviews and authenticated broker access require private configuration.
-The static preview does not run the service.
 
 ## How a stock reaches the shortlist
 

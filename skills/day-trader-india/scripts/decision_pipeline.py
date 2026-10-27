@@ -56,6 +56,7 @@ OPTIONAL_CONFIG = {
     # Reference data (sector, market-cap tier, F&O lot size) and the pre-market report.
     "reference_db": "reference.sqlite",
     "min_scored_headlines": 3,
+    # Email over SMTP; the password lives in the owner-only secret store.
     "smtp_host": "",
     "smtp_port": 587,
     "smtp_user": "",

@@ -620,13 +620,20 @@ reference refreshed {esc(report["reference_refreshed"])}</footer>
 
 
 def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
-    """Send the report over SMTP. Off unless smtp_host and recipients are configured."""
-    host, recipients = config.get("smtp_host"), config.get("email_to")
-    if not host or not recipients:
-        return {"sent": False, "reason": "email is not configured (smtp_host and email_to)"}
-    password = os.environ.get("SMTP_PASSWORD")
+    """Send the report over SMTP. Off unless smtp_host, smtp_user and recipients are set.
+
+    The password comes from the environment or the owner-only secret store, never JSON.
+    """
+    import secret_store
+
+    recipients = config.get("email_to")
+    if not recipients:
+        return {"sent": False, "reason": "email is not configured (email_to)"}
+    if not config.get("smtp_host") or not config.get("smtp_user"):
+        return {"sent": False, "reason": "set the mail server and sender in Setup → Email"}
+    password = os.environ.get("SMTP_PASSWORD") or secret_store.get("SMTP_PASSWORD")
     if not password:
-        return {"sent": False, "reason": "SMTP_PASSWORD is not set in this environment"}
+        return {"sent": False, "reason": "no SMTP password saved (Setup → Email)"}
     message = EmailMessage()
     message["Subject"] = f"Pre-market watchlist {report['session_date']}: " + (
         ", ".join(report["watching"]) or "nothing today"
@@ -639,10 +646,14 @@ def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
     )
     message.add_alternative(page, subtype="html")
     try:
-        with smtplib.SMTP(host, int(config.get("smtp_port", 587)), timeout=30) as smtp:
+        with smtplib.SMTP(
+            config["smtp_host"], int(config.get("smtp_port", 587)), timeout=30
+        ) as smtp:
             smtp.starttls()
             smtp.login(config["smtp_user"], password)
             smtp.send_message(message)
+    except smtplib.SMTPAuthenticationError:
+        return {"sent": False, "reason": "the mail server rejected the sender or app password"}
     except (OSError, smtplib.SMTPException):
         # Never echo the server's reply: it can carry the account address or token state.
         return {

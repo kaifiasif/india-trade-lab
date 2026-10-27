@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import mimetypes
 import secrets
 import sqlite3
 import threading
@@ -15,7 +14,7 @@ from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from history import HistoryStore
 from watchlist import build_watchlist
@@ -23,9 +22,20 @@ from watchlist import build_watchlist
 import engine
 import india_research
 import paper_book
+import setup_api
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 WEB = ASSETS / "observatory"
+STATIC_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".woff2": "font/woff2",
+    ".json": "application/json",
+    ".ico": "image/x-icon",
+}
 STAGES = (
     ("data", "Data sentinel", "Validated observations", ("quote", "quote_rejected")),
     (
@@ -304,6 +314,7 @@ class Observatory:
         self.status = "idle"
         self.error: str | None = None
         self.token = secrets.token_urlsafe(32)
+        self.setup = setup_api.SetupApi(self.directory)
         self.selection_key: tuple | None = None
         self.selection: dict = {}
         files = sorted(self.directory.glob("run-*.sqlite"), key=lambda item: item.stat().st_mtime)
@@ -474,8 +485,12 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
         def log_message(self, *_: Any) -> None:
             pass
 
-        def send_bytes(self, status: int, body: bytes, content_type: str) -> None:
+        def send_bytes(
+            self, status: int, body: bytes, content_type: str, extra: dict | None = None
+        ) -> None:
             self.send_response(status)
+            for name, value in (extra or {}).items():
+                self.send_header(name, value)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
@@ -490,8 +505,8 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(body)
 
-        def json_response(self, status: int, payload: dict) -> None:
-            self.send_bytes(status, json.dumps(payload).encode(), "application/json")
+        def json_response(self, status: int, payload: dict, extra: dict | None = None) -> None:
+            self.send_bytes(status, json.dumps(payload).encode(), "application/json", extra)
 
         def trusted_host(self) -> bool:
             return self.headers.get("Host") in (
@@ -503,7 +518,19 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
             if not self.trusted_host():
                 self.json_response(403, {"error": "Loopback host required"})
                 return
-            route = urlsplit(self.path).path
+            parts = urlsplit(self.path)
+            route = parts.path
+            if route == "/api/health":
+                self.json_response(200, app.setup.health())
+                return
+            if route.startswith("/api/setup/"):
+                try:
+                    self.json_response(200, app.setup.handle_get(route, parse_qs(parts.query)))
+                except setup_api.ApiError as error:
+                    self.json_response(error.status, error.payload())
+                except (OSError, ValueError, sqlite3.Error):
+                    self.json_response(503, {"error": "storage_unavailable"})
+                return
             if route == "/api/state":
                 try:
                     self.json_response(200, app.state())
@@ -513,24 +540,23 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
             if route == "/api/session":
                 self.json_response(200, {"token": app.token, "paper_only": True})
                 return
-            files = {
-                "/": "index.html",
-                "/index.html": "index.html",
-                "/app.js": "app.js",
-                "/scene.js": "scene.js",
-                "/style.css": "style.css",
-                "/mascot.svg": "mascot.svg",
-                "/favicon.svg": "favicon.svg",
-                # Bundled, pinned Three.js (see vendor/THIRD-PARTY.md); no CDN is used.
-                "/vendor/three.module.min.js": "vendor/three.module.min.js",
-            }
-            if route not in files:
+            # The built single-page app: any file under the web folder, never a dotfile,
+            # Markdown or anything outside it. Unknown paths fall back to index.html.
+            relative = "index.html" if route in ("/", "/index.html") else route.lstrip("/")
+            path = (WEB / relative).resolve()
+            if (
+                not path.is_relative_to(WEB.resolve())
+                or path.suffix not in STATIC_TYPES
+                or any(part.startswith(".") for part in path.relative_to(WEB.resolve()).parts)
+            ):
                 self.json_response(404, {"error": "Not found"})
                 return
-            path = WEB / files[route]
-            self.send_bytes(
-                200, path.read_bytes(), mimetypes.guess_type(path.name)[0] or "text/plain"
-            )
+            if not path.is_file():
+                if "." in Path(relative).name:
+                    self.json_response(404, {"error": "Not found"})
+                    return
+                path = WEB / "index.html"
+            self.send_bytes(200, path.read_bytes(), STATIC_TYPES[path.suffix])
 
         def do_POST(self) -> None:
             origin = self.headers.get("Origin")
@@ -545,6 +571,10 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
             ):
                 self.json_response(403, {"error": "Same-origin session required"})
                 return
+            route = urlsplit(self.path).path
+            if route.startswith("/api/setup/"):
+                self.setup_post(route.rsplit("/", 1)[1])
+                return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 1024 or self.headers.get("Content-Type") != "application/json":
@@ -552,7 +582,6 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
                     raise ValueError("Expected a JSON object")
-                route = urlsplit(self.path).path
                 if route == "/api/replay":
                     app.start(payload.get("scenario", "baseline"))
                 elif route == "/api/control":
@@ -565,6 +594,33 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
                 self.json_response(409, {"error": "Invalid request or replay already active"})
             except (OSError, sqlite3.Error):
                 self.json_response(503, {"error": "Storage unavailable; replay not started"})
+
+        def setup_post(self, action: str) -> None:
+            limit = setup_api.body_limit(action)
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = -1
+            if self.headers.get("Content-Type") != "application/json":
+                self.json_response(415, {"error": "json_required"})
+                return
+            if not 0 <= length <= limit:
+                self.json_response(413, {"error": "too_large"})
+                return
+            try:
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                if not isinstance(payload, dict):
+                    raise ValueError
+            except ValueError:
+                self.json_response(400, {"error": "malformed_json"})
+                return
+            try:
+                body, headers = app.setup.handle_post(action, payload)
+                self.json_response(200, body, headers)
+            except setup_api.ApiError as error:
+                self.json_response(error.status, error.payload())
+            except (OSError, sqlite3.Error):
+                self.json_response(503, {"error": "storage_unavailable"})
 
     return Handler
 
