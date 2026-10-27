@@ -1,0 +1,839 @@
+{
+  "as_of": "2026-10-26T08:40:00+05:30",
+  "session_date": "2026-10-26",
+  "mode": "pre_market_research",
+  "watching": [
+    "NSE:DEMOA",
+    "NSE:DEMOB"
+  ],
+  "selection": {
+    "mode": "judge",
+    "reason": "SYNTHETIC SAMPLE: offline sample agents followed fixed rules in place of a model",
+    "pool": [
+      "NSE:DEMOA",
+      "NSE:DEMOB",
+      "NSE:DEMOD"
+    ],
+    "judge": {
+      "summary": "Sample rule: pick the finalist with the most positive specialists.",
+      "picks": [
+        {
+          "symbol": "NSE:DEMOA",
+          "rating": "Buy",
+          "conviction": "medium",
+          "reason": "Sample rule: highest specialist support, then the highest score.",
+          "evidence_ids": [
+            "NSE:DEMOA#technical"
+          ],
+          "strategy": "orb-v1"
+        },
+        {
+          "symbol": "NSE:DEMOB",
+          "rating": "Overweight",
+          "conviction": "low",
+          "reason": "Sample rule: highest specialist support, then the highest score.",
+          "evidence_ids": [
+            "NSE:DEMOB#technical"
+          ],
+          "strategy": "orb-v1"
+        }
+      ],
+      "dropped": []
+    },
+    "model_calls": 11,
+    "finalists": {
+      "NSE:DEMOA": {
+        "risk-scout": {
+          "risk_level": "low",
+          "risks": "Sample rule: no event flagged in the headlines.",
+          "evidence_ids": [
+            "NSE:DEMOA#technical"
+          ]
+        },
+        "setup-planner": {
+          "strategy": "orb-v1",
+          "plan": "Sample rule: watch for a close above the first 15 minutes' high.",
+          "evidence_ids": [
+            "NSE:DEMOA#technical"
+          ]
+        }
+      },
+      "NSE:DEMOB": {
+        "risk-scout": {
+          "risk_level": "medium",
+          "risks": "Sample rule: a policy meeting ahead makes this medium risk.",
+          "evidence_ids": [
+            "NSE:DEMOB#technical"
+          ]
+        },
+        "setup-planner": {
+          "strategy": "orb-v1",
+          "plan": "Sample rule: watch for a close above the first 15 minutes' high.",
+          "evidence_ids": [
+            "NSE:DEMOB#technical"
+          ]
+        }
+      }
+    },
+    "strategies": {
+      "orb-v1": {
+        "description": "close above the 15-minute opening-range high; stop at the opening-range low",
+        "tournament_doubled_costs": {
+          "trades": null,
+          "net_inr": null,
+          "win_rate_pct": null,
+          "profit_factor": null
+        }
+      },
+      "vwap-pullback-v1": {
+        "description": "after an opening-range breakout, a pullback to session VWAP that closes back above it; stop below the pullback low",
+        "tournament_doubled_costs": {
+          "trades": null,
+          "net_inr": null,
+          "win_rate_pct": null,
+          "profit_factor": null
+        }
+      }
+    },
+    "strategy_basis": "sample playbook (synthetic)",
+    "specialists": {
+      "news-analyst": {
+        "status": "ok"
+      },
+      "sentiment-analyst": {
+        "status": "ok"
+      },
+      "technical-analyst": {
+        "status": "ok"
+      },
+      "sector-analyst": {
+        "status": "ok"
+      },
+      "liquidity-analyst": {
+        "status": "ok"
+      },
+      "brokerage-analyst": {
+        "status": "ok"
+      }
+    },
+    "filters": {
+      "min_market_cap_tier": "large",
+      "min_turnover_inr": 20000000,
+      "max_reference_age_days": 7
+    }
+  },
+  "candidates": [
+    {
+      "symbol": "NSE:DEMOA",
+      "name": "Demo Alpha Software Ltd",
+      "reference": {
+        "symbol": "NSE:DEMOA",
+        "known": true,
+        "sector": "Information Technology",
+        "market_cap_tier": "large",
+        "tier_source": "SYNTHETIC",
+        "fno_eligible": true,
+        "lot_size": 300,
+        "sector_index": "NIFTY IT",
+        "refreshed_at": "2026-10-26T08:40:00+05:30",
+        "stale_days": 0
+      },
+      "fno": {
+        "eligible": true,
+        "lot_size": 300,
+        "note": "F&O eligibility and lot size are shown for context. This desk trades cash equity only; no derivative position is sized or placed here."
+      },
+      "technical": {
+        "session": "2026-10-23",
+        "sessions_used": 85,
+        "close": 1860.4,
+        "rsi14": 50.3698,
+        "rsi": {
+          "band": "neutral",
+          "note": "RSI 45-55; no momentum edge either way"
+        },
+        "trend": {
+          "label": "mixed",
+          "reason": "the close and the two averages disagree"
+        },
+        "return5_pct": -1.6432,
+        "return20_pct": -1.3302,
+        "atr14": 49.9767,
+        "high20": 2000.37
+      },
+      "liquidity": {
+        "turnover_inr": 4491673200.0,
+        "sessions": 85,
+        "basis": "mean of close x volume over the last 20 stored sessions"
+      },
+      "sector": {
+        "index": "NIFTY IT",
+        "available": true,
+        "direction": "up",
+        "return1_pct": 0.42,
+        "return5_pct": 1.35,
+        "return20_pct": 3.1,
+        "last_session": "2026-10-23"
+      },
+      "news": {
+        "as_of": "2026-10-26T08:40:00+05:30",
+        "headlines": 3,
+        "scored": 2,
+        "mean_score": 1.0,
+        "band": "bullish",
+        "confidence": "low",
+        "broker_calls": [],
+        "items": [
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Alpha Software wins multi-year cloud contract, shares rise",
+            "source": "SYNTHETIC",
+            "score": 1.0,
+            "band": "bullish",
+            "words": [
+              {
+                "word": "wins",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              },
+              {
+                "word": "contract",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              },
+              {
+                "word": "rise",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              }
+            ]
+          },
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Alpha Software reports strong order growth in Q2",
+            "source": "SYNTHETIC",
+            "score": 1.0,
+            "band": "bullish",
+            "words": [
+              {
+                "word": "strong",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              },
+              {
+                "word": "order",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              },
+              {
+                "word": "growth",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              }
+            ]
+          },
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Alpha Software expects steady margins despite currency swings",
+            "source": "SYNTHETIC",
+            "score": 0.0,
+            "band": "neutral",
+            "words": [],
+            "reason": "no scored word in this headline"
+          }
+        ],
+        "method": "finance word list with negation and hedging, applied to headline text only",
+        "notice": "Headline wording, not a forecast and not a reading of the articles. Fewer than five scored headlines is an anecdote; treat the band accordingly."
+      },
+      "score": {
+        "total": 9.5,
+        "parts": [
+          {
+            "factor": "market cap",
+            "points": 3.0,
+            "reason": "NSE index membership puts it in the large tier"
+          },
+          {
+            "factor": "liquidity",
+            "points": 3.0,
+            "reason": "20-session mean traded value INR 4,491,673,200, 224.6x the floor"
+          },
+          {
+            "factor": "trend",
+            "points": 0.5,
+            "reason": "the close and the two averages disagree"
+          },
+          {
+            "factor": "momentum",
+            "points": 0.5,
+            "reason": "RSI 45-55; no momentum edge either way"
+          },
+          {
+            "factor": "sector",
+            "points": 1.5,
+            "reason": "NIFTY IT is up 1.35% over 5 sessions"
+          },
+          {
+            "factor": "headline tone",
+            "points": 1.0,
+            "reason": "2 scored headlines read bullish"
+          }
+        ],
+        "maximum": 12.0
+      },
+      "filters": [],
+      "eligible": true,
+      "rank": 1,
+      "watch": true,
+      "judge_pick": {
+        "symbol": "NSE:DEMOA",
+        "rating": "Buy",
+        "conviction": "medium",
+        "reason": "Sample rule: highest specialist support, then the highest score.",
+        "evidence_ids": [
+          "NSE:DEMOA#technical"
+        ],
+        "strategy": "orb-v1"
+      },
+      "agent_views": {
+        "news-analyst": {
+          "stance": "positive",
+          "summary": "Sample news-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOA#news-1"
+          ]
+        },
+        "sentiment-analyst": {
+          "stance": "positive",
+          "summary": "Sample sentiment-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOA#news-1"
+          ]
+        },
+        "technical-analyst": {
+          "stance": "positive",
+          "summary": "Sample technical-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOA#technical"
+          ]
+        },
+        "sector-analyst": {
+          "stance": "positive",
+          "summary": "Sample sector-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOA#sector"
+          ]
+        },
+        "liquidity-analyst": {
+          "stance": "positive",
+          "summary": "Sample liquidity-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOA#liquidity"
+          ]
+        },
+        "brokerage-analyst": {
+          "stance": "insufficient",
+          "summary": "Sample brokerage-analyst rule applied to the supplied evidence.",
+          "evidence_ids": []
+        }
+      }
+    },
+    {
+      "symbol": "NSE:DEMOB",
+      "name": "Demo Bharat Bank Ltd",
+      "reference": {
+        "symbol": "NSE:DEMOB",
+        "known": true,
+        "sector": "Financial Services",
+        "market_cap_tier": "large",
+        "tier_source": "SYNTHETIC",
+        "fno_eligible": true,
+        "lot_size": 750,
+        "sector_index": "NIFTY FINANCIAL SERVICES",
+        "refreshed_at": "2026-10-26T08:40:00+05:30",
+        "stale_days": 0
+      },
+      "fno": {
+        "eligible": true,
+        "lot_size": 750,
+        "note": "F&O eligibility and lot size are shown for context. This desk trades cash equity only; no derivative position is sized or placed here."
+      },
+      "technical": {
+        "session": "2026-10-23",
+        "sessions_used": 85,
+        "close": 898.39,
+        "rsi14": 43.2461,
+        "rsi": {
+          "band": "weak",
+          "note": "RSI 30-45; momentum against a long"
+        },
+        "trend": {
+          "label": "mixed",
+          "reason": "the close and the two averages disagree"
+        },
+        "return5_pct": -2.4391,
+        "return20_pct": -4.4805,
+        "atr14": 24.8149,
+        "high20": 978.69
+      },
+      "liquidity": {
+        "turnover_inr": 4680349050.0,
+        "sessions": 85,
+        "basis": "mean of close x volume over the last 20 stored sessions"
+      },
+      "sector": {
+        "index": "NIFTY FINANCIAL SERVICES",
+        "available": true,
+        "direction": "up",
+        "return1_pct": 0.42,
+        "return5_pct": 1.35,
+        "return20_pct": 3.1,
+        "last_session": "2026-10-23"
+      },
+      "news": {
+        "as_of": "2026-10-26T08:40:00+05:30",
+        "headlines": 3,
+        "scored": 2,
+        "mean_score": 0.164,
+        "band": "leaning bullish",
+        "confidence": "low",
+        "broker_calls": [],
+        "items": [
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Bharat Bank loan growth beats estimates",
+            "source": "SYNTHETIC",
+            "score": 0.828,
+            "band": "bullish",
+            "words": [
+              {
+                "word": "growth",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              },
+              {
+                "word": "beats",
+                "value": 1.0,
+                "negated": false,
+                "hedged": false
+              }
+            ]
+          },
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Bharat Bank asset quality stable, provisions fall",
+            "source": "SYNTHETIC",
+            "score": -0.5,
+            "band": "bearish",
+            "words": [
+              {
+                "word": "fall",
+                "value": -1.0,
+                "negated": false,
+                "hedged": false
+              }
+            ]
+          },
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Bharat Bank shares flat ahead of policy meeting",
+            "source": "SYNTHETIC",
+            "score": 0.0,
+            "band": "neutral",
+            "words": [],
+            "reason": "no scored word in this headline"
+          }
+        ],
+        "method": "finance word list with negation and hedging, applied to headline text only",
+        "notice": "Headline wording, not a forecast and not a reading of the articles. Fewer than five scored headlines is an anecdote; treat the band accordingly."
+      },
+      "score": {
+        "total": 8.5,
+        "parts": [
+          {
+            "factor": "market cap",
+            "points": 3.0,
+            "reason": "NSE index membership puts it in the large tier"
+          },
+          {
+            "factor": "liquidity",
+            "points": 3.0,
+            "reason": "20-session mean traded value INR 4,680,349,050, 234.0x the floor"
+          },
+          {
+            "factor": "trend",
+            "points": 0.5,
+            "reason": "the close and the two averages disagree"
+          },
+          {
+            "factor": "momentum",
+            "points": 0.0,
+            "reason": "RSI 30-45; momentum against a long"
+          },
+          {
+            "factor": "sector",
+            "points": 1.5,
+            "reason": "NIFTY FINANCIAL SERVICES is up 1.35% over 5 sessions"
+          },
+          {
+            "factor": "headline tone",
+            "points": 0.5,
+            "reason": "2 scored headlines read leaning bullish"
+          }
+        ],
+        "maximum": 12.0
+      },
+      "filters": [],
+      "eligible": true,
+      "rank": 2,
+      "watch": true,
+      "judge_pick": {
+        "symbol": "NSE:DEMOB",
+        "rating": "Overweight",
+        "conviction": "low",
+        "reason": "Sample rule: highest specialist support, then the highest score.",
+        "evidence_ids": [
+          "NSE:DEMOB#technical"
+        ],
+        "strategy": "orb-v1"
+      },
+      "agent_views": {
+        "news-analyst": {
+          "stance": "positive",
+          "summary": "Sample news-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOB#news-1"
+          ]
+        },
+        "sentiment-analyst": {
+          "stance": "positive",
+          "summary": "Sample sentiment-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOB#news-1"
+          ]
+        },
+        "technical-analyst": {
+          "stance": "positive",
+          "summary": "Sample technical-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOB#technical"
+          ]
+        },
+        "sector-analyst": {
+          "stance": "positive",
+          "summary": "Sample sector-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOB#sector"
+          ]
+        },
+        "liquidity-analyst": {
+          "stance": "positive",
+          "summary": "Sample liquidity-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOB#liquidity"
+          ]
+        },
+        "brokerage-analyst": {
+          "stance": "insufficient",
+          "summary": "Sample brokerage-analyst rule applied to the supplied evidence.",
+          "evidence_ids": []
+        }
+      }
+    },
+    {
+      "symbol": "NSE:DEMOC",
+      "name": "Demo Cement Ltd",
+      "reference": {
+        "symbol": "NSE:DEMOC",
+        "known": true,
+        "sector": "Construction Materials",
+        "market_cap_tier": "mid",
+        "tier_source": "SYNTHETIC",
+        "fno_eligible": false,
+        "lot_size": null,
+        "sector_index": null,
+        "refreshed_at": "2026-10-26T08:40:00+05:30",
+        "stale_days": 0
+      },
+      "fno": {
+        "eligible": false,
+        "lot_size": null,
+        "note": "F&O eligibility and lot size are shown for context. This desk trades cash equity only; no derivative position is sized or placed here."
+      },
+      "technical": {
+        "session": "2026-10-23",
+        "sessions_used": 85,
+        "close": 477.5,
+        "rsi14": 46.3836,
+        "rsi": {
+          "band": "neutral",
+          "note": "RSI 45-55; no momentum edge either way"
+        },
+        "trend": {
+          "label": "mixed",
+          "reason": "the close and the two averages disagree"
+        },
+        "return5_pct": -2.0874,
+        "return20_pct": -3.0929,
+        "atr14": 13.0257,
+        "high20": 517.17
+      },
+      "liquidity": {
+        "turnover_inr": 436014450.0,
+        "sessions": 85,
+        "basis": "mean of close x volume over the last 20 stored sessions"
+      },
+      "sector": {
+        "available": false,
+        "reason": "no sector index mapped for Construction Materials"
+      },
+      "news": {
+        "as_of": "2026-10-26T08:40:00+05:30",
+        "headlines": 0,
+        "scored": 0,
+        "mean_score": 0.0,
+        "band": "no signal",
+        "confidence": "low",
+        "broker_calls": [],
+        "items": [],
+        "method": "finance word list with negation and hedging, applied to headline text only",
+        "notice": "Headline wording, not a forecast and not a reading of the articles. Fewer than five scored headlines is an anecdote; treat the band accordingly."
+      },
+      "score": {
+        "total": 5.5,
+        "parts": [
+          {
+            "factor": "market cap",
+            "points": 1.5,
+            "reason": "NSE index membership puts it in the mid tier"
+          },
+          {
+            "factor": "liquidity",
+            "points": 3.0,
+            "reason": "20-session mean traded value INR 436,014,450, 21.8x the floor"
+          },
+          {
+            "factor": "trend",
+            "points": 0.5,
+            "reason": "the close and the two averages disagree"
+          },
+          {
+            "factor": "momentum",
+            "points": 0.5,
+            "reason": "RSI 45-55; no momentum edge either way"
+          },
+          {
+            "factor": "sector",
+            "points": 0.0,
+            "reason": "no sector index mapped for Construction Materials"
+          },
+          {
+            "factor": "headline tone",
+            "points": 0.0,
+            "reason": "only 0 scored headlines; too few to weigh"
+          }
+        ],
+        "maximum": 12.0
+      },
+      "filters": [
+        "mid cap is below the large-cap minimum"
+      ],
+      "eligible": false,
+      "rank": 3,
+      "watch": false,
+      "judge_pick": null,
+      "agent_views": {}
+    },
+    {
+      "symbol": "NSE:DEMOD",
+      "name": "Demo Durables Ltd",
+      "reference": {
+        "symbol": "NSE:DEMOD",
+        "known": true,
+        "sector": "Consumer Durables",
+        "market_cap_tier": "large",
+        "tier_source": "SYNTHETIC",
+        "fno_eligible": true,
+        "lot_size": 125,
+        "sector_index": null,
+        "refreshed_at": "2026-10-26T08:40:00+05:30",
+        "stale_days": 0
+      },
+      "fno": {
+        "eligible": true,
+        "lot_size": 125,
+        "note": "F&O eligibility and lot size are shown for context. This desk trades cash equity only; no derivative position is sized or placed here."
+      },
+      "technical": {
+        "session": "2026-10-23",
+        "sessions_used": 85,
+        "close": 1751.97,
+        "rsi14": 29.2506,
+        "rsi": {
+          "band": "oversold",
+          "note": "RSI at or below 30; falling, not yet turning"
+        },
+        "trend": {
+          "label": "down",
+          "reason": "close below the 20-session average, which is below the 50-session"
+        },
+        "return5_pct": -4.1335,
+        "return20_pct": -10.9278,
+        "atr14": 52.0865,
+        "high20": 1982.65
+      },
+      "liquidity": {
+        "turnover_inr": 1295173250.0,
+        "sessions": 85,
+        "basis": "mean of close x volume over the last 20 stored sessions"
+      },
+      "sector": {
+        "available": false,
+        "reason": "no sector index mapped for Consumer Durables"
+      },
+      "news": {
+        "as_of": "2026-10-26T08:40:00+05:30",
+        "headlines": 2,
+        "scored": 2,
+        "mean_score": -0.664,
+        "band": "bearish",
+        "confidence": "low",
+        "broker_calls": [],
+        "items": [
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Durables cuts guidance as demand weakens",
+            "source": "SYNTHETIC",
+            "score": -0.5,
+            "band": "bearish",
+            "words": [
+              {
+                "word": "cuts",
+                "value": -1.0,
+                "negated": false,
+                "hedged": false
+              }
+            ]
+          },
+          {
+            "published_at": "2026-10-25T19:00:00+05:30",
+            "title": "Demo Durables shares slump after weak quarter",
+            "source": "SYNTHETIC",
+            "score": -0.828,
+            "band": "bearish",
+            "words": [
+              {
+                "word": "slump",
+                "value": -1.0,
+                "negated": false,
+                "hedged": false
+              },
+              {
+                "word": "weak",
+                "value": -1.0,
+                "negated": false,
+                "hedged": false
+              }
+            ]
+          }
+        ],
+        "method": "finance word list with negation and hedging, applied to headline text only",
+        "notice": "Headline wording, not a forecast and not a reading of the articles. Fewer than five scored headlines is an anecdote; treat the band accordingly."
+      },
+      "score": {
+        "total": 5.0,
+        "parts": [
+          {
+            "factor": "market cap",
+            "points": 3.0,
+            "reason": "NSE index membership puts it in the large tier"
+          },
+          {
+            "factor": "liquidity",
+            "points": 3.0,
+            "reason": "20-session mean traded value INR 1,295,173,250, 64.8x the floor"
+          },
+          {
+            "factor": "trend",
+            "points": 0.0,
+            "reason": "close below the 20-session average, which is below the 50-session"
+          },
+          {
+            "factor": "momentum",
+            "points": 0.0,
+            "reason": "RSI at or below 30; falling, not yet turning"
+          },
+          {
+            "factor": "sector",
+            "points": 0.0,
+            "reason": "no sector index mapped for Consumer Durables"
+          },
+          {
+            "factor": "headline tone",
+            "points": -1.0,
+            "reason": "2 scored headlines read bearish"
+          }
+        ],
+        "maximum": 12.0
+      },
+      "filters": [],
+      "eligible": true,
+      "rank": 4,
+      "watch": false,
+      "judge_pick": null,
+      "agent_views": {
+        "news-analyst": {
+          "stance": "positive",
+          "summary": "Sample news-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOD#news-1"
+          ]
+        },
+        "sentiment-analyst": {
+          "stance": "positive",
+          "summary": "Sample sentiment-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOD#news-1"
+          ]
+        },
+        "technical-analyst": {
+          "stance": "positive",
+          "summary": "Sample technical-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOD#technical"
+          ]
+        },
+        "sector-analyst": {
+          "stance": "positive",
+          "summary": "Sample sector-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOD#sector"
+          ]
+        },
+        "liquidity-analyst": {
+          "stance": "positive",
+          "summary": "Sample liquidity-analyst rule applied to the supplied evidence.",
+          "evidence_ids": [
+            "NSE:DEMOD#liquidity"
+          ]
+        },
+        "brokerage-analyst": {
+          "stance": "insufficient",
+          "summary": "Sample brokerage-analyst rule applied to the supplied evidence.",
+          "evidence_ids": []
+        }
+      }
+    }
+  ],
+  "blocked": [],
+  "universe_source": "SYNTHETIC sample universe",
+  "reference_refreshed": "2026-10-26T08:40:00+05:30",
+  "notice": "A watchlist built before the open from stored sessions and collected headlines. It is not a trade list, not advice and not a forecast. Every entry still needs a completed-bar signal, fresh pre-trade evidence, the review roles and the journal's own gates during market hours."
+}

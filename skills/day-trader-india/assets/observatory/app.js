@@ -440,6 +440,44 @@ function renderWatchlist() {
           "</div>"
         : `<div class="watchlist-empty"><span>◎</span><div><strong>Market inputs needed</strong><p>${esc(watchlist.reason || "No instruments passed the current history and liquidity checks.")}</p><small>${watchlist.blocked?.length || 0} instruments blocked · no stock picks invented</small></div></div>`;
 }
+function renderDesk() {
+    const desk = state?.desk || {},
+        report = desk.report,
+        card = desk.scorecard;
+    $("desk-status").textContent = report
+        ? `${readable(report.mode || "unknown").toUpperCase()} · ${report.session_date || ""}`
+        : "NO REPORT YET";
+    $("desk-note").textContent = report
+        ? `${report.reason || ""}. ${report.assessed} assessed · ${report.pool} passed the filters.`
+        : "Run premarket.py (scheduled at 08:40 on the server) to see the judge's picks here.";
+    const picks = report?.picks || [];
+    const pickList = picks.length
+        ? '<div class="watchlist-grid">' +
+          picks
+              .map(
+                  (pick, index) =>
+                      `<article><span class="watchlist-rank">0${index + 1}</span><div><strong>${esc(pick.symbol)}</strong><small>${esc(pick.rating)} · ${esc(pick.conviction)} conviction · ${esc(pick.strategy || "any proven strategy")}${pick.risk ? " · risk " + esc(pick.risk) : ""}</small><p>${esc(pick.reason)}</p></div><span class="watchlist-wait">WATCH AT OPEN</span></article>`,
+              )
+              .join("") +
+          "</div>"
+        : `<div class="watchlist-empty"><span>◎</span><div><strong>${report ? "No picks today" : "No pre-market report yet"}</strong><p>${esc(report ? report.reason || "The desk is sitting out." : "Nothing is invented: picks appear only after a real report.")}</p><small>${report?.dropped?.length || 0} picks dropped by sub-agents</small></div></div>`;
+    const strategies = card?.strategies
+        ? Object.entries(card.strategies)
+              .map(
+                  ([name, item]) =>
+                      `<li><strong>${esc(name)}</strong> ${item.eligible ? "proven" : "not proven"} · ${esc(item.doubled_costs?.trades ?? "—")} trades at double costs${item.eligible ? "" : " · " + esc(item.reason)}</li>`,
+              )
+              .join("")
+        : "<li>No tournament scorecard yet. Run tournament.py after loading history.</li>";
+    const agents = Object.entries(report?.specialists || {})
+        .map(([role, status]) => `<span class="desk-agent ${esc(status)}">${esc(role)}</span>`)
+        .join("");
+    $("desk-content").innerHTML =
+        pickList +
+        `<div class="desk-meta"><h3 class="subhead">Strategy tournament</h3><ul>${strategies}</ul>` +
+        (agents ? `<h3 class="subhead">Specialists</h3><div class="desk-agents">${agents}</div>` : "") +
+        "</div>";
+}
 function renderResearch() {
     const research = state?.research || {},
         report = research.report;
@@ -643,6 +681,7 @@ function render() {
     renderRisk();
     renderHistory();
     renderWatchlist();
+    renderDesk();
     renderResearch();
     scenes?.pipeline?.update(state, stageCounts(), selectedStage);
     scenes?.tape?.update(state);

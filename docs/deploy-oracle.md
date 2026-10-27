@@ -174,6 +174,7 @@ are kept in `data/observatory/reports/`.
 ## Check on it
 
 ```bash
+python3 ~/india-trade-lab/scripts/itl.py --config ~/india-trade-lab/data/observatory/pipeline.json status
 systemctl list-timers 'india-trade-lab*'
 journalctl -u india-trade-lab-premarket -n 50
 journalctl -u india-trade-lab-market -f

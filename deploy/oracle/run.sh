@@ -49,6 +49,12 @@ case "$job" in
     # then re-run the strategy tournament so tomorrow trades only what is still proven.
     python3 scripts/data_sync.py --config "$CONFIG" --days 90 --max-symbols 3 \
       || echo "History sync failed; the tournament will use the history already stored."
+    # Fridays: write the week's paper track record, ready to publish.
+    if [ "$(date +%u)" = "5" ]; then
+      mkdir -p "$DATA/reports"
+      python3 scripts/itl.py --config "$CONFIG" track --days 7 \
+        > "$DATA/reports/track-$(date +%F).md" || true
+    fi
     exec python3 scripts/tournament.py --config "$CONFIG" ;;
   *)
     echo "Usage: run.sh premarket | market | aftermarket | observatory" >&2

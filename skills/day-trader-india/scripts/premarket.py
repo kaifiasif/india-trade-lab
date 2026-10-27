@@ -207,77 +207,150 @@ def build(
     for instrument in universe.get("instruments", [])[:20]:
         symbol = instrument.get("symbol", "")
         facts = reference.lookup(symbol, clock)
-        entry: dict[str, Any] = {
-            "symbol": symbol,
-            "name": instrument.get("name", ""),
-            "reference": facts,
-            "fno": {
-                "eligible": facts.get("fno_eligible", False),
-                "lot_size": facts.get("lot_size"),
-                "note": "F&O eligibility and lot size are shown for context. This desk trades "
-                "cash equity only; no derivative position is sized or placed here.",
-            },
-        }
         try:
             rows = technical.daily_bars(history, symbol, clock)
-            snapshot = technical.snapshot(rows)
-            values = snapshot["values"]
-            entry["technical"] = {
-                "session": snapshot["session"],
-                "sessions_used": snapshot["sessions_used"],
-                "close": values["close"],
-                "rsi14": values["rsi14"],
-                "rsi": rsi_band(values["rsi14"]),
-                "trend": trend_of(values),
-                "return5_pct": values["return5_pct"],
-                "return20_pct": values["return20_pct"],
-                "atr14": values["atr14"],
-                "high20": values["high20"],
-            }
-            turnover = (
-                sum(row["close"] * row["volume"] for row in rows[-20:]) / min(20, len(rows))
-                if rows
-                else None
+            index_name = facts.get("sector_index")
+            sector = (
+                reference.sector_performance(index_name, clock)
+                if index_name
+                else {
+                    "available": False,
+                    "reason": "no sector index mapped for "
+                    + (facts.get("sector") or "an unknown sector"),
+                }
             )
-            entry["liquidity"] = {
-                "turnover_inr": turnover,
-                "sessions": len(rows),
-                "basis": "mean of close x volume over the last 20 stored sessions",
-            }
+            candidates.append(
+                describe(
+                    symbol,
+                    instrument.get("name", ""),
+                    facts,
+                    rows,
+                    sector,
+                    news.get(symbol, []),
+                    clock,
+                    settings,
+                )
+            )
         except (ValueError, KeyError, sqlite3.Error) as exc:
             blocked.append({"symbol": symbol, "reason": str(exc)})
-            continue
-        index_name = facts.get("sector_index")
-        entry["sector"] = (
-            reference.sector_performance(index_name, clock)
-            if index_name
-            else {
-                "available": False,
-                "reason": "no sector index mapped for "
-                + (facts.get("sector") or "an unknown sector"),
-            }
-        )
-        entry["news"] = sentiment.summarize(news.get(symbol, []), clock.isoformat())
-        entry["score"] = score(entry, settings)
-        entry["filters"] = hard_filters(entry, settings)
-        entry["eligible"] = not entry["filters"]
-        candidates.append(entry)
-    candidates.sort(key=lambda item: item["score"]["total"], reverse=True)
-    top = int(coordinator.config["max_candidates"])
-    for rank, item in enumerate(candidates, 1):
-        item["rank"] = rank
-    pool = [item for item in candidates if item["eligible"]][: chooser["pool"]]
     session = str(clock.date())
     playbook = strategies.allowed_for(
         coordinator.config_path.parent, coordinator.config["strategy"], "", session
     )
-    proven = {}
     try:
         card = json.loads(
             strategies.scorecard_path(coordinator.config_path.parent).read_text(encoding="utf-8")
         )
     except (OSError, ValueError):
         card = {}
+    top = int(coordinator.config["max_candidates"])
+
+    def run(pool: list[dict], proven: dict) -> dict:
+        if not chooser["agents"]:
+            return {
+                "mode": "deterministic",
+                "reason": "selection agents are turned off in pipeline.json; this is the "
+                "deterministic ranking",
+                "pool": [item["symbol"] for item in pool],
+                "watching": [item["symbol"] for item in pool[:top]],
+                "judge": None,
+                "specialists": {},
+                "model_calls": 0,
+            }
+        return selection_agents.run_selection(
+            pool,
+            session,
+            coordinator.reviewer,
+            top,
+            reserve=lambda count: coordinator.store.reserve_model_calls(
+                session, count, coordinator.config["max_model_calls_per_day"]
+            ),
+            min_specialists=chooser["min_specialists"],
+            proven=proven,
+            finalist_count=chooser["finalists"],
+        )
+
+    return assemble(
+        candidates,
+        blocked,
+        settings,
+        playbook,
+        card,
+        run,
+        chooser["pool"],
+        clock,
+        universe.get("source"),
+    )
+
+
+def describe(
+    symbol: str,
+    name: str,
+    facts: dict,
+    rows: list[dict],
+    sector: dict,
+    news_items: list[dict],
+    clock: dt.datetime,
+    settings: dict,
+) -> dict[str, Any]:
+    """One stock's report entry from its reference facts, daily bars, sector and headlines."""
+    snapshot = technical.snapshot(rows)
+    values = snapshot["values"]
+    entry: dict[str, Any] = {
+        "symbol": symbol,
+        "name": name,
+        "reference": facts,
+        "fno": {
+            "eligible": facts.get("fno_eligible", False),
+            "lot_size": facts.get("lot_size"),
+            "note": "F&O eligibility and lot size are shown for context. This desk trades "
+            "cash equity only; no derivative position is sized or placed here.",
+        },
+        "technical": {
+            "session": snapshot["session"],
+            "sessions_used": snapshot["sessions_used"],
+            "close": values["close"],
+            "rsi14": values["rsi14"],
+            "rsi": rsi_band(values["rsi14"]),
+            "trend": trend_of(values),
+            "return5_pct": values["return5_pct"],
+            "return20_pct": values["return20_pct"],
+            "atr14": values["atr14"],
+            "high20": values["high20"],
+        },
+        "liquidity": {
+            "turnover_inr": sum(row["close"] * row["volume"] for row in rows[-20:])
+            / min(20, len(rows)),
+            "sessions": len(rows),
+            "basis": "mean of close x volume over the last 20 stored sessions",
+        },
+        "sector": sector,
+        "news": sentiment.summarize(news_items, clock.isoformat()),
+    }
+    entry["score"] = score(entry, settings)
+    entry["filters"] = hard_filters(entry, settings)
+    entry["eligible"] = not entry["filters"]
+    return entry
+
+
+def assemble(
+    candidates: list[dict],
+    blocked: list[dict],
+    settings: dict,
+    playbook: dict,
+    card: dict,
+    run,
+    pool_size: int,
+    clock: dt.datetime,
+    universe_source: str | None,
+) -> dict[str, Any]:
+    """Rank, pool, let the agents choose (or sit out), and shape the report."""
+    candidates.sort(key=lambda item: item["score"]["total"], reverse=True)
+    for rank, item in enumerate(candidates, 1):
+        item["rank"] = rank
+    pool = [item for item in candidates if item["eligible"]][:pool_size]
+    session = str(clock.date())
+    proven = {}
     for name in playbook["allowed"]:
         result = (card.get("strategies") or {}).get(name) or {}
         proven[name] = {
@@ -297,30 +370,8 @@ def build(
             "specialists": {},
             "model_calls": 0,
         }
-    elif chooser["agents"]:
-        selection = selection_agents.run_selection(
-            pool,
-            session,
-            coordinator.reviewer,
-            top,
-            reserve=lambda count: coordinator.store.reserve_model_calls(
-                session, count, coordinator.config["max_model_calls_per_day"]
-            ),
-            min_specialists=chooser["min_specialists"],
-            proven=proven,
-            finalist_count=chooser["finalists"],
-        )
     else:
-        selection = {
-            "mode": "deterministic",
-            "reason": "selection agents are turned off in pipeline.json; this is the "
-            "deterministic ranking",
-            "pool": [item["symbol"] for item in pool],
-            "watching": [item["symbol"] for item in pool[:top]],
-            "judge": None,
-            "specialists": {},
-            "model_calls": 0,
-        }
+        selection = run(pool, proven)
     picks = {pick["symbol"]: pick for pick in (selection["judge"] or {}).get("picks", [])}
     for item in candidates:
         symbol = item["symbol"]
@@ -360,7 +411,7 @@ def build(
         },
         "candidates": candidates,
         "blocked": blocked,
-        "universe_source": universe.get("source"),
+        "universe_source": universe_source,
         "reference_refreshed": next(
             (
                 item["reference"].get("refreshed_at")
@@ -378,6 +429,10 @@ def build(
 
 def esc(value: Any) -> str:
     return html.escape("—" if value is None else str(value))
+
+
+def _num(value: Any, places: int = 2) -> str:
+    return f"{float(value):.{places}f}" if isinstance(value, (int, float)) else "—"
 
 
 def _rupees(value: Any) -> str:
@@ -464,9 +519,9 @@ def render(report: dict) -> str:
 liquidity {_rupees(item["liquidity"]["turnover_inr"])}</p>
 {verdict}{filtered}
 <p>Trend <strong>{esc(technicals["trend"]["label"])}</strong> ({esc(technicals["trend"]["reason"])}).
-RSI <strong>{esc(technicals["rsi14"])}</strong> — {esc(technicals["rsi"]["note"])}.
-Last close INR {esc(technicals["close"])} on {esc(technicals["session"])}; 5-session
-{esc(technicals["return5_pct"])}%, 20-session {esc(technicals["return20_pct"])}%.</p>
+RSI <strong>{_num(technicals["rsi14"], 1)}</strong> — {esc(technicals["rsi"]["note"])}.
+Last close INR {_num(technicals["close"])} on {esc(technicals["session"])}; 5-session
+{_num(technicals["return5_pct"])}%, 20-session {_num(technicals["return20_pct"])}%.</p>
 <p>Sector: {esc(sector.get("index") or "unmapped")} — {sector_line}.</p>
 <p>Headlines: <strong>{esc(mood["band"])}</strong> from {esc(mood["scored"])} scored of
 {esc(mood["headlines"])} collected ({esc(mood["confidence"])} confidence).</p>
@@ -489,11 +544,18 @@ Last close INR {esc(technicals["close"])} on {esc(technicals["session"])}; 5-ses
     )
     limits = chosen["filters"]
     proven = chosen.get("strategies") or {}
+
+    def tested(stats: dict) -> str:
+        if stats.get("trades") is None:
+            return ""
+        return (
+            f" — tournament at double costs: {esc(stats['trades'])} trades, net "
+            f"{_rupees(stats.get('net_inr'))}, profit factor {esc(stats.get('profit_factor'))}"
+        )
+
     playbook = "".join(
-        f"<li><strong>{esc(name)}</strong>: {esc(item['description'])} — tournament at double "
-        f"costs: {esc(item['tournament_doubled_costs'].get('trades'))} trades, net "
-        f"{_rupees(item['tournament_doubled_costs'].get('net_inr'))}, profit factor "
-        f"{esc(item['tournament_doubled_costs'].get('profit_factor'))}</li>"
+        f"<li><strong>{esc(name)}</strong>: {esc(item['description'])}"
+        f"{tested(item['tournament_doubled_costs'])}</li>"
         for name, item in proven.items()
     )
     dropped = "".join(

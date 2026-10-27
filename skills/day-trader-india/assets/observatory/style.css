@@ -2091,6 +2091,34 @@ th {
         max-width: 200px;
     }
 }
+/* Today's desk: the judge's picks and the strategy tournament. */
+.desk-meta {
+    padding: 0 23px 20px;
+}
+.desk-meta ul {
+    margin: 6px 0 12px;
+    padding-left: 16px;
+    font-size: 9px;
+    line-height: 1.8;
+    color: #9e81af;
+}
+.desk-agents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+.desk-agent {
+    font-size: 8px;
+    padding: 4px 7px;
+    border-radius: 999px;
+    background: #f5effa;
+    color: #8b6d9f;
+}
+.desk-agent.unavailable {
+    background: #fbeef0;
+    color: #bb5a65;
+}
 /* Persisted research reports and exchange routing, separate from replay fills. */
 .research-panel {
     margin-bottom: 22px;
