@@ -52,6 +52,14 @@ OPTIONAL_CONFIG = {
     "reports_dir": "reports",
     "local_base_url": "http://127.0.0.1:11434/v1",
     "local_timeout_seconds": 60,
+    # Reference data (sector, market-cap tier, F&O lot size) and the pre-market report.
+    "reference_db": "reference.sqlite",
+    "min_scored_headlines": 3,
+    "smtp_host": "",
+    "smtp_port": 587,
+    "smtp_user": "",
+    "email_from": "",
+    "email_to": "",
 }
 NESTED_DEFAULTS = ("debate", "memory")
 
