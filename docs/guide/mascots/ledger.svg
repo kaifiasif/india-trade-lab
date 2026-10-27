@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="250" height="250" viewBox="0 0 250 250" fill="none" role="img" aria-label="Ledger, the brokerage-analyst mascot">
+<defs>
+<linearGradient id="m-ledger-body" x1="70" y1="65" x2="180" y2="218" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#d9d8ee"/></linearGradient>
+<linearGradient id="m-ledger-face" x1="76" y1="86" x2="167" y2="156" gradientUnits="userSpaceOnUse"><stop stop-color="#302d4b"/><stop offset="1" stop-color="#141326"/></linearGradient>
+<linearGradient id="m-ledger-ear" x1="45" y1="95" x2="75" y2="141" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#5a6b8c"/></linearGradient>
+</defs>
+<ellipse cx="129" cy="228" rx="55" ry="9" fill="#5a6b8c" opacity=".16"/>
+<path d="M126 64V40" stroke="#dedcf5" stroke-width="7" stroke-linecap="round"/><circle cx="126" cy="35" r="9" fill="#5a6b8c"/><circle cx="123" cy="32" r="3" fill="#fff" opacity=".7"/>
+
+<rect x="46" y="99" width="26" height="43" rx="13" fill="url(#m-ledger-ear)"/>
+<rect x="180" y="98" width="22" height="43" rx="11" fill="url(#m-ledger-ear)"/>
+<path d="M96 166H157L169 201C173 216 161 225 151 220L126 209 102 220C90 225 79 215 84 201L96 166Z" fill="url(#m-ledger-body)"/>
+<path d="M96 176L80 188" stroke="#e7e6f7" stroke-width="17" stroke-linecap="round"/>
+<path d="M157 175L178 161" stroke="#e7e6f7" stroke-width="17" stroke-linecap="round"/>
+<rect x="62" y="61" width="124" height="118" rx="39" fill="url(#m-ledger-body)"/>
+<rect x="75" y="80" width="99" height="77" rx="28" fill="url(#m-ledger-face)"/>
+<path d="M93 101C96 97 103 97 106 101" stroke="#cfd8ea" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+<rect x="92" y="107" width="14" height="23" rx="7" fill="#cfd8ea"/>
+<rect x="143" y="107" width="14" height="23" rx="7" fill="#cfd8ea"/>
+<path d="M119 136C123 140 129 140 133 136" stroke="#cfd8ea" stroke-width="3" stroke-linecap="round"/>
+<circle cx="86" cy="140" r="5" fill="#5a6b8c" opacity=".45"/>
+<circle cx="163" cy="140" r="5" fill="#5a6b8c" opacity=".45"/>
+<path d="M126 168L118 176L124 206L126 210L128 206L134 176Z" fill="#5a6b8c"/><path d="M118 168H134L126 177Z" fill="#3f4b66"/><rect x="40" y="178" width="46" height="34" rx="6" fill="#7b5b45"/><rect x="53" y="170" width="20" height="10" rx="4" stroke="#7b5b45" stroke-width="4"/><rect x="40" y="190" width="46" height="4" fill="#5d4433"/><rect x="58" y="187" width="10" height="10" rx="2" fill="#e2b84a"/>
+</svg>
