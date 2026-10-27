@@ -539,6 +539,14 @@ def main(argv: list[str] | None = None) -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(page, encoding="utf-8")
         report["report_html"] = str(destination)
+        from decision_pipeline import DailyCoordinator
+
+        # The paper autopilot reads today's judge picks from this file.
+        picks = DailyCoordinator(args.config).path("reports_dir") / (
+            f"premarket-{report['session_date']}.json"
+        )
+        picks.parent.mkdir(parents=True, exist_ok=True)
+        picks.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
         if args.email:
             from decision_pipeline import DailyCoordinator
 

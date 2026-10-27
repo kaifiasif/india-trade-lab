@@ -13,7 +13,7 @@ month with Claude.
 | Time | Job | Needs today's Kite login |
 |---|---|---|
 | 08:40 | NSE reference refresh, news collection (Google News, NSE filings, ET Markets), pre-market report emailed to you | No |
-| 09:05–15:50 | Research worker: live Kite quotes and candles, agent reviews and debates, paper proposals | Yes |
+| 09:05–15:50 | Research worker: live Kite quotes and candles, agent reviews and debates; with the autopilot on, it records approved paper entries and exits itself | Yes |
 | 16:10 | Today's completed session saved into history | Yes |
 | Always | Dashboard on the server's loopback, reached through an SSH tunnel | No |
 
@@ -106,6 +106,20 @@ Gemini's free tier, copy the exact model IDs shown in Google AI Studio:
 Leave `model_provider` as `disabled` until the key is in the secrets file;
 otherwise the run stops and reports the missing key.
 
+To let the agents trade the paper book on their own all session, turn on the
+autopilot:
+
+```json
+"autopilot": {"enabled": true, "require_premarket_pick": true}
+```
+
+Each tick, it records the coordinator's approved entry, but only for a stock the
+pre-market judge picked today. It also records every protective exit: stop,
+target, and the 15:15 square-off. Every journal limit still applies: per-trade
+risk, daily loss, trade count, open positions, loss streak and drawdown stop.
+It uses virtual money only. To stop new entries at once, create
+`data/observatory/HALT_ENTRIES`; exits keep running.
+
 ## 6. First day: log in, choose stocks, load history
 
 ```bash
@@ -134,8 +148,10 @@ Before 09:05:
 
 The script prints Zerodha's login link. Log in with 2FA, then paste back the
 address the browser lands on (`http://127.0.0.1/?...request_token=...`; the page
-itself will not load, which is expected). It saves today's token and restarts the
-research worker. Kite requires this daily login; it cannot be automated around.
+itself will not load, which is expected). It saves today's token. It then asks, for each stock, where you checked NSE's
+ASM/GSM surveillance lists and today's announcements. These are the two
+pre-trade checks that need a person, so entries stay blocked until you answer.
+Finally, it restarts the research worker. Kite requires this daily login; it cannot be automated around.
 
 ## The dashboard (UI)
 

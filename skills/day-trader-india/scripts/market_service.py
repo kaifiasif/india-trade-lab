@@ -15,6 +15,7 @@ from data_sync import refresh_current
 from decision_pipeline import DailyCoordinator, read_json
 from market_router import route_all
 
+import autopilot
 import evidence
 import pretrade
 
@@ -71,6 +72,7 @@ class MarketService:
                     allow_entries=india["status"] == "OPEN" and not halted
                 )
                 result["india"] = {"status": report["status"], "run_id": report["run_id"]}
+                result["autopilot"] = autopilot.apply(self.coordinator, report)
             except (ValueError, OSError, KeyError, TypeError, sqlite3.Error):
                 result["india"] = {"status": "DATA_BLOCK", "reason": "Research run unavailable"}
         for symbol in self.symbols:

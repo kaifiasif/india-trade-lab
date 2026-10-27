@@ -24,6 +24,7 @@ or use the Python CLI below.
 - **Decision memory**: every rated call is settled on later stored prices and becomes a point-in-time lesson for later debates, with a hit-rate and alpha scorecard.
 - A **backtest grid** over stored sessions with a doubled-cost stress run, per-symbol, per-month and first/second-half results. See [backtest.md](skills/day-trader-india/references/backtest.md).
 - A **pre-market report**, emailed if you configure Gmail: trend, RSI, sector moves, market-cap tier, liquidity, F&O lot size, headline sentiment and broker calls per stock. Six specialist agents assess the filtered pool and a **selection judge** makes the final call. See [premarket.md](skills/day-trader-india/references/premarket.md).
+- A **paper autopilot** that records agent-approved entries for the judge's picks and every protective exit (stop, target, 15:15 square-off) in the virtual book, all session, under the journal's limits.
 - A free **Oracle Cloud deployment** with scheduled pre-market, market-hours and after-close jobs, a daily phone login and the dashboard over an SSH tunnel. See [deploy-oracle.md](docs/deploy-oracle.md).
 - A **preflight check** that names every missing input and its fix, plus collectors for dated news evidence and the machine-checkable pre-trade checks.
 - A session router for India/US timezones and optional continuous read-only Binance spot collection. See [daily service setup](skills/day-trader-india/references/daily-service.md).
@@ -32,7 +33,7 @@ The supplied opening-range rule is a test harness, not a proven trading strategy
 
 ## What is not running
 
-The research worker must be explicitly configured and started. It can poll mapped broker quotes/current candles and collect public crypto data; it produces proposals, not automatic paper fills. There is no live quote stream, real broker order path, US trading adapter, crypto ledger, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
+The research worker must be explicitly configured and started. It can poll mapped broker quotes/current candles and collect public crypto data; it produces proposals; with the opt-in paper autopilot it records approved ones in the virtual book. It never places a real order. There is no live quote stream, real broker order path, US trading adapter, crypto ledger, token refresh, or automatic calendar/instrument-master/news ingestion. The paper journal accepts manually supplied quotes and assumed fills. Its open positions are valued at entry cost; drawdown is based on closed trades.
 
 The broker adapters are implemented but require an authorised account session, appropriate data entitlement and a verified symbol/instrument mapping. No account is connected by cloning this repository. Authenticated broker access has not been integration-tested in this project.
 

@@ -70,8 +70,11 @@ OPTIONAL_CONFIG = {
     },
     # Market-wide RSS feeds matched to stocks by name; ET Markets by default.
     "market_feeds": ["https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"],
+    # Paper autopilot: record agent-approved entries and protective exits in the virtual
+    # book each tick. Off by default; entries need a pre-market judge pick unless relaxed.
+    "autopilot": {"enabled": False, "require_premarket_pick": True},
 }
-NESTED_DEFAULTS = ("debate", "memory", "selection")
+NESTED_DEFAULTS = ("debate", "memory", "selection", "autopilot")
 
 DEFAULT_CONFIG = {
     **OPTIONAL_CONFIG,
@@ -269,6 +272,8 @@ class DailyCoordinator:
                 "Selection needs a pool of 1-15, a quorum of 1-6 specialists, a market-cap "
                 "tier of large/mid/small and a reference age of 1-31 days"
             )
+        if any(type(value) is not bool for value in cfg["autopilot"].values()):
+            raise ValueError("Autopilot settings must be true or false")
         if not isinstance(cfg["market_feeds"], list) or len(cfg["market_feeds"]) > 5:
             raise ValueError("market_feeds must be a list of at most five feed URLs")
         if cfg.get("version") != 1 or cfg.get("mode") != "paper_research":
