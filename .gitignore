@@ -24,3 +24,4 @@ htmlcov/
 .cursor/skills/
 .github/skills/
 node_modules/
+*.tsbuildinfo
