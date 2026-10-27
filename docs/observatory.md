@@ -19,6 +19,7 @@ Python backend ship together in the portable `day-trader-india` skill.
 | Paper replay | A synthetic NSE:DEMO session through the real engine: five pipeline stages, the price with fills, stop and target, paper calls and engine events, with pause and halt |
 | Research | Recorded research reviews, how past ratings settled, history coverage and the screened watchlist |
 | Agents | The sixteen-member desk and what each one is allowed to do |
+| Learning | Each agent's report card, recent lessons from mistakes, what the desk knows about each stock, model use per tier against your limits, and fine-tuning readiness |
 | Setup | Eleven steps from an empty server to a working desk (below) |
 | Settings | Every editable `pipeline.json` setting, in tabs, saved atomically with a backup |
 

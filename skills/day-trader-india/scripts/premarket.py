@@ -234,6 +234,13 @@ def build(
             )
         except (ValueError, KeyError, sqlite3.Error) as exc:
             blocked.append({"symbol": symbol, "reason": str(exc)})
+    learned = learned_context(coordinator, [item["symbol"] for item in candidates], clock)
+    for item in candidates:
+        reason = learned["cooldowns"].get(item["symbol"])
+        if reason:
+            # Learned from repeated losses: the stock sits out; never the reverse.
+            item["filters"].append(reason)
+            item["eligible"] = False
     session = str(clock.date())
     playbook = strategies.allowed_for(
         coordinator.config_path.parent, coordinator.config["strategy"], "", session
@@ -269,9 +276,10 @@ def build(
             min_specialists=chooser["min_specialists"],
             proven=proven,
             finalist_count=chooser["finalists"],
+            learned=learned,
         )
 
-    return assemble(
+    report = assemble(
         candidates,
         blocked,
         settings,
@@ -282,6 +290,32 @@ def build(
         clock,
         universe.get("source"),
     )
+    report["learning"] = {
+        "lessons": sum(len(items) for items in learned["lessons"].values()),
+        "stock_notes": len(learned["stock_notes"]),
+        "cooldowns": learned["cooldowns"],
+        "weights": learned["weights"],
+    }
+    return report
+
+
+def learned_context(coordinator: Any, symbols: list[str], clock: dt.datetime) -> dict:
+    """What earlier sessions taught, known before ``clock``. Empty when learning is off."""
+    empty = {"lessons": {}, "stock_notes": {}, "cooldowns": {}, "track_records": {}, "weights": {}}
+    options = coordinator.config["learning"]
+    if not options["enabled"]:
+        return empty
+    import learning
+
+    path = coordinator.config_path.parent / "learning.sqlite"
+    if not path.is_file():
+        return empty
+    try:
+        return learning.LearningStore(path).context(
+            [*learning.GRADED_ROLES], symbols, clock, options
+        )
+    except (sqlite3.Error, ValueError, KeyError, TypeError):
+        return empty  # Learning is advice; a damaged store must never block the report.
 
 
 def describe(

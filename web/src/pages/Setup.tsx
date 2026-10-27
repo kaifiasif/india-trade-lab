@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Field, Progress } from "@/components/ui/misc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { JobRunner, SecretField, explain } from "@/components/setup-kit";
+import { RoutingEditor } from "@/components/RoutingEditor";
 import { Mascot, type Mood } from "@/mascots/Mascot";
 import type { MascotKey } from "@/mascots/data";
 import { Confetti } from "@/mascots/Confetti";
@@ -368,6 +369,7 @@ function ModelStep() {
         </Button>
       </form>
       {chosen.key && <SecretField name={chosen.key} label={`${chosen.label} key`} />}
+      <RoutingEditor />
     </div>
   );
 }

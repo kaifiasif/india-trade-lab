@@ -58,7 +58,11 @@ case "$job" in
       python3 scripts/itl.py --config "$CONFIG" track --days 7 \
         > "$DATA/reports/track-$(date +%F).md" || true
     fi
-    exec python3 scripts/tournament.py --config "$CONFIG" ;;
+    python3 scripts/tournament.py --config "$CONFIG" \
+      || echo "Tournament failed; yesterday's scorecard stays until it expires."
+    # Grade every agent's calls on today's completed session and paper trades, and
+    # write the lessons and stock notes tomorrow's agents will read.
+    exec python3 scripts/learning.py --config "$CONFIG" settle ;;
   *)
     echo "Usage: run.sh premarket | market | aftermarket | observatory" >&2
     exit 64 ;;

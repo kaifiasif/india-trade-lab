@@ -31,6 +31,7 @@ from watchlist import build_watchlist
 
 import engine
 import india_research
+import model_router
 import paper_book
 import strategies
 
@@ -87,8 +88,31 @@ OPTIONAL_CONFIG = {
         "managed_exits": True,
         "filters": True,
     },
+    # Learning from mistakes: each evening every agent's calls are graded against what
+    # the stock then did and against paper trades. Lessons and stock notes go back into
+    # the next prompts; repeated losers cool down. All of it can only narrow choices.
+    "learning": {
+        "enabled": True,
+        "lessons_in_prompts": True,
+        "stock_notes": True,
+        "cooldown": True,
+        "weight_specialists": True,
+        "min_graded": 20,
+    },
+    # Smart routing: simple jobs to free tiers, hard ones to the strongest tier allowed,
+    # with quotas you enter, a same-day cache and escalation on bad answers.
+    "routing": {
+        "enabled": False,
+        "tiers": [],
+        "simple": [],
+        "complex": [],
+        "escalate": True,
+        "cache": True,
+        "store_prompts": True,
+        "max_escalations_per_day": 10,
+    },
 }
-NESTED_DEFAULTS = ("debate", "memory", "selection", "autopilot", "strategy")
+NESTED_DEFAULTS = ("debate", "memory", "selection", "autopilot", "strategy", "learning", "routing")
 
 DEFAULT_CONFIG = {
     **OPTIONAL_CONFIG,
@@ -306,6 +330,14 @@ class DailyCoordinator:
             )
         if any(type(value) is not bool for value in cfg["autopilot"].values()):
             raise ValueError("Autopilot settings must be true or false")
+        learn = cfg["learning"]
+        if any(type(learn[key]) is not bool for key in learn if key != "min_graded") or (
+            type(learn["min_graded"]) is not int or not 5 <= learn["min_graded"] <= 500
+        ):
+            raise ValueError("learning switches must be true/false and min_graded 5-500")
+        model_router.validate_routing(
+            cfg["routing"], model_providers.PROVIDERS, model_providers.MODEL_PATTERNS
+        )
         if cfg["smtp_host"] and not re.fullmatch(
             r"(?=.{1,253}$)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}", str(cfg["smtp_host"])
         ):
@@ -343,7 +375,7 @@ class DailyCoordinator:
         if reviewer is not None:
             self.reviewer = reviewer
         else:
-            self.reviewer = model_providers.configured_reviewer(cfg)
+            self.reviewer = model_providers.configured_reviewer(cfg, self.config_path.parent)
 
     def path(self, name: str) -> Path:
         value = self.config[name]

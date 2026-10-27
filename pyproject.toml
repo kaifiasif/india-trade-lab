@@ -7,7 +7,7 @@ exclude = ["dist"]
 select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["broker_data", "engine", "india_research", "kite_login", "make_universe", "evidence", "paper_book", "autopilot", "itl", "job_runner", "preflight", "premarket", "strategies", "tournament", "pretrade", "reference",
+known-first-party = ["broker_data", "engine", "india_research", "kite_login", "make_universe", "evidence", "paper_book", "autopilot", "itl", "job_runner", "learning", "model_router", "preflight", "premarket", "strategies", "tournament", "pretrade", "reference",
     "secret_store", "selection_agents", "sentiment", "settings_store", "setup_api", "skill_tools"]
 
 [tool.ruff.format]

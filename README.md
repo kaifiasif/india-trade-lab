@@ -66,6 +66,8 @@ itl dashboard    # the local dashboard, including Today's desk
 - **Intraday review:** six evidence roles, bull/bear and risk debates, a five-tier rating that can only stop or downgrade an entry, and decision memory. See [debate.md](skills/day-trader-india/references/debate.md).
 - **Paper journal and engine:** cash, risk, daily-loss, trade-count, streak and drawdown limits; stale-quote rejection; checksummed state; restart recovery. See [engine.md](skills/day-trader-india/references/engine.md).
 - **Paper autopilot:** records approved entries and every exit in the virtual book, all session (opt in).
+- **Learning from mistakes:** each evening every agent's calls are graded against what the stock did and the paper trades. Mistakes become lessons the agent reads next morning, specialists who are right count for more, and repeat losers sit out a week. Fine-tuning data can be exported when it would help. See [learning.md](skills/day-trader-india/references/learning.md).
+- **Smart model routing:** simple jobs go to a free tier and the judge to a stronger one, with your daily limits, a same-day cache and escalation on bad answers, so free quotas last.
 - **Dashboard:** a React app in light and dark: Today, the pre-market desk, a paper replay, research, the agents, an 11-step Setup and Settings. Animated SVG mascots react to what the desk records. See [observatory.md](docs/observatory.md).
 - **Backtests and checks:** a backtest grid with doubled costs ([backtest.md](skills/day-trader-india/references/backtest.md)), a preflight check that names every missing input and its fix, and 224 offline tests.
 - **Portable skills:** 17 skills (the trading desk, a developer skill and 15 specialist roles) for Claude, Codex and other agents.

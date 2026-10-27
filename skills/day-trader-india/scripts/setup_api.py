@@ -206,6 +206,21 @@ class SetupApi:
             "anthropic": "ANTHROPIC_API_KEY",
             "openai": "OPENAI_API_KEY",
         }.get(provider)
+        routing = settings.get("routing") or {}
+        if routing.get("enabled"):
+            needed = {
+                {
+                    "gemini": "GEMINI_API_KEY",
+                    "anthropic": "ANTHROPIC_API_KEY",
+                    "openai": "OPENAI_API_KEY",
+                }.get(tier.get("provider"))  # fmt: skip
+                for tier in routing.get("tiers", [])
+            } - {None}
+            model_ready = all(secrets[key]["set"] for key in needed)
+        else:
+            model_ready = provider in ("disabled", "local") or bool(
+                provider_key and secrets[provider_key]["set"]
+            )
         today = str(dt.datetime.now(IST).date())
         try:
             attested = json.loads(
@@ -242,7 +257,7 @@ class SetupApi:
             ("kite_keys", "Kite Connect keys", kite["api_key"] and kite["api_secret"], "From developers.kite.trade (₹500/month Connect plan)"),
             ("kite_login", "Today's Kite login", kite["token"]["today"], "2FA login; tokens expire every morning"),
             ("email", "Email delivery", email["server"] and email["password"], "Mail server, sender and app password"),
-            ("model", "Research model", provider == "disabled" or bool(provider_key and secrets[provider_key]["set"]) or provider == "local", "Optional: the judge and agents need one"),
+            ("model", "Research model", model_ready, "Optional: the judge and agents need one"),
             ("stocks", "Choose stocks", universe["exists"] and universe.get("age_days", 99) <= 30, "NSE stock list plus today's Kite instrument list"),
             ("history", "Load history", enough, "At least 50 complete sessions per stock"),
             ("tournament", "Run the tournament", tournament["ran"], "Decides which strategies may trade"),
@@ -288,6 +303,8 @@ class SetupApi:
             return settings_store.editable_view(self.config)
         if route == "/api/setup/jobs":
             return {"jobs": self.jobs.recent()}
+        if route == "/api/setup/learning":
+            return self.learning()
         if route.startswith("/api/setup/jobs/"):
             offset = int((query.get("offset") or ["0"])[0] or 0)
             try:
@@ -295,6 +312,39 @@ class SetupApi:
             except KeyError:
                 raise ApiError(404, "not_found", "No such job") from None
         raise ApiError(404, "not_found", "Not found")
+
+    def learning(self) -> dict:
+        """Track records, lessons, stock notes, fine-tune readiness and today's model use."""
+        import learning
+        import model_router
+
+        now = dt.datetime.now(IST)
+        path = self.data_dir / "learning.sqlite"
+        routing: dict = {}
+        if self.config.is_file():
+            try:
+                routing = settings_store.editable_view(self.config)["settings"].get("routing") or {}
+            except (OSError, ValueError):
+                routing = {}
+        summary = (
+            learning.LearningStore(path).summary(now)
+            if path.is_file()
+            else {
+                "sessions_graded": 0,
+                "totals": {},
+                "track_records": {},
+                "lessons": [],
+                "stock_notes": [],
+                "finetune": [],
+            }  # fmt: skip
+        )
+        return {
+            **summary,
+            "routing": {
+                "enabled": bool(routing.get("enabled")),
+                "usage": model_router.usage_today(path, routing, now) if path.is_file() else [],
+            },
+        }
 
     # ---------- writes ----------
 

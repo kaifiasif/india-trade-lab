@@ -37,6 +37,16 @@ KINDS: dict[str, dict[str, Any]] = {
         "argv": ["data_sync.py", "--days", "180", "--max-symbols", "3"],
         "timeout": 3600,
     },
+    "learn": {
+        "label": "Grade the agents and learn",
+        "argv": ["learning.py", "settle"],
+        "timeout": 600,
+    },
+    "finetune_export": {
+        "label": "Export fine-tuning data",
+        "argv": ["learning.py", "finetune-export", "--role", "all"],
+        "timeout": 600,
+    },
     "reference": {
         "label": "Refresh NSE reference data",
         "argv": ["reference.py", "refresh"],
@@ -82,6 +92,8 @@ class JobRunner:
         if script == "reference.py":
             return [self.python, str(HERE / script), "--db",
                     str(self.config.parent / "reference.sqlite"), *rest]  # fmt: skip
+        if script == "learning.py":  # Subcommands follow the top-level --config.
+            return [self.python, str(HERE / script), "--config", str(self.config), *rest]
         return [self.python, str(HERE / script), *rest, "--config", str(self.config)]
 
     def start(self, kind: str, command: list[str] | None = None) -> dict:

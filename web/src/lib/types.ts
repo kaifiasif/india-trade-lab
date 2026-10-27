@@ -128,3 +128,47 @@ export interface SetupStatus {
   job_kinds: Record<string, string>;
   steps: { id: string; label: string; done: boolean; detail: string }[];
 }
+
+export interface TrackRecord {
+  graded: number;
+  right: number;
+  wrong: number;
+  missed: number;
+  accuracy: number;
+}
+
+export interface StockNote {
+  symbol: string;
+  sessions_studied?: number;
+  avg_range_pct?: number;
+  avg_abs_gap_pct?: number;
+  up_close_share?: number;
+  judge_picks_graded?: number;
+  judge_picks_right?: number;
+  paper_trades?: number;
+  paper_wins?: number;
+  avg_r?: number | null;
+  cooldown_until?: string;
+  cooldown_reason?: string;
+}
+
+export interface TierUsage {
+  tier: string;
+  provider: string;
+  model: string;
+  requests: number;
+  requests_per_day: number;
+  tokens: number;
+  tokens_per_day: number;
+  outcomes: Record<string, number>;
+}
+
+export interface LearningSummary {
+  sessions_graded: number;
+  totals: Record<string, number>;
+  track_records: Record<string, TrackRecord>;
+  lessons: { scope: string; subject: string; session: string; kind: string; text: string }[];
+  stock_notes: StockNote[];
+  finetune: { role: string; examples: number; graded: number; accuracy: number | null; advice: string }[];
+  routing: { enabled: boolean; usage: TierUsage[] };
+}

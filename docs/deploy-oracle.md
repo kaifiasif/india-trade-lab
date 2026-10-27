@@ -14,7 +14,7 @@ month with Claude.
 |---|---|---|
 | 08:40 | NSE reference refresh, news collection (Google News, NSE filings, ET Markets), pre-market report emailed to you | No |
 | 09:05–15:50 | Research worker: live Kite quotes and candles, agent reviews and debates; with the autopilot on, it records approved paper entries and exits itself | Yes |
-| 16:10 | Today's completed session saved into history, then the strategy tournament re-run, so tomorrow trades only what is still proven | Yes |
+| 16:10 | Today's completed session saved into history, the strategy tournament re-run, then every agent graded on the day so tomorrow's agents read their lessons | Yes |
 | Always | Dashboard on the server's loopback, reached through an SSH tunnel | No |
 
 Jobs skip themselves on days that are not in `sessions.json`.
@@ -99,6 +99,8 @@ steps did is there:
   *Send a test email*.
 - **Research model**: optional. Pick a provider, paste its key and the exact
   model ID (for Gemini's free tier, copy it from Google AI Studio).
+  Turn on **Smart routing** there to send the simple jobs to a free tier and only
+  the judge to a stronger one, with the daily limits your key shows.
 - **Choose stocks**: upload NSE's `EQUITY_L.csv` (download it from nseindia.com on
   your phone if needed), search, and pick one to three stocks.
 - **Load history**, **Run the tournament**, **Create the paper book** and

@@ -260,6 +260,33 @@ class HttpTests(Isolated):
         self.assertIn('"keys_changed": ["KITE_API_SECRET"]', audit)
         self.assertTrue(self.get("/api/health")["paper_only"])
 
+    def test_learning_summary_is_readable_before_any_grading(self):
+        self.post("init_project", {})
+        summary = self.get("/api/setup/learning")
+        self.assertEqual(summary["sessions_graded"], 0)
+        self.assertFalse(summary["routing"]["enabled"])
+        status = {step["id"]: step["done"] for step in self.get("/api/setup/status")["steps"]}
+        self.assertTrue(status["model"])  # Rules-only is a valid, finished choice.
+
+    def test_routing_needs_its_provider_keys_before_the_model_step_is_done(self):
+        self.post("init_project", {})
+        version = self.get("/api/setup/settings")["version"]
+        routing = {
+            "enabled": True,
+            "tiers": [{"name": "free", "provider": "gemini", "model": "flash"}],
+            "simple": ["free"],
+            "complex": ["free"],
+            "escalate": True,
+            "cache": True,
+            "store_prompts": True,
+            "max_escalations_per_day": 10,
+        }
+        self.post("save_settings", {"version": version, "changes": {"routing": routing}})
+        done = lambda: {s["id"]: s["done"] for s in self.get("/api/setup/status")["steps"]}  # noqa: E731
+        self.assertFalse(done()["model"])
+        self.post("save_secret", {"key": "GEMINI_API_KEY", "value": "gemini-key-123456"})
+        self.assertTrue(done()["model"])
+
     def test_logins_are_rate_limited(self):
         self.post("init_project", {})
         codes = []

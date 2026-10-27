@@ -9,6 +9,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from agent_runtime import (
     MODEL_ROLES,
@@ -16,6 +17,7 @@ from agent_runtime import (
     ROLE_PURPOSES,
     OfflineReviewer,
     OpenAIReviewer,
+    raise_if_rate_limited,
     review_prompt,
     token_usage,
 )
@@ -156,7 +158,8 @@ class StructuredReviewer:
                 "response_id": response_id,
                 "usage": usage,
             }
-        except (ValueError, OSError, KeyError, TypeError, IndexError, AttributeError):
+        except (ValueError, OSError, KeyError, TypeError, IndexError, AttributeError) as exc:
+            raise_if_rate_limited(exc)
             raise ValueError(
                 "Research provider failed; no retry, host switch or fallback"
             ) from None
@@ -243,7 +246,8 @@ class LocalReviewer:
                     }
                 ),
             }
-        except (ValueError, OSError, KeyError, TypeError, IndexError, AttributeError):
+        except (ValueError, OSError, KeyError, TypeError, IndexError, AttributeError) as exc:
+            raise_if_rate_limited(exc)
             raise ValueError("Local model failed; no retry or fallback") from None
 
 
@@ -252,6 +256,7 @@ class RoutedReviewer:
 
     name = "routed_research_models"
     uses_network = True
+    accepts_validate = True
     QUICK_ROLES = {"india-data", "india-news", "india-screener", "india-sentiment"} | {
         role for role, tier in MODEL_ROLES.items() if tier == "quick"
     }
@@ -292,38 +297,64 @@ class RoutedReviewer:
         self.config = dict(config)
 
     def client(self, role: str):
-        route = self.routes[role]
-        if route["provider"] == "openai":
-            return OpenAIReviewer(
-                route["model"],
-                timeout=self.config.get("model_timeout_seconds", 20),
-                effort=self.config.get("reasoning_effort"),
-                max_output_tokens=self.config.get("max_output_tokens", 1200),
-            )
-        if route["provider"] == "local":
-            return LocalReviewer(
-                route["model"],
-                self.config.get("local_base_url", "http://127.0.0.1:11434/v1"),
-                self.config.get("local_timeout_seconds", 60),
-                self.config.get("max_output_tokens", 1200),
-            )
-        return StructuredReviewer(
-            route["provider"],
-            route["model"],
-            self.config.get("model_timeout_seconds", 20),
-            self.config.get("max_output_tokens", 1200),
-        )
+        return client_for(self.routes[role], self.config)
 
     def review(self, role: str, context: dict, reports: list[dict]) -> dict:
         return self.client(role).review(role, context, reports)
 
-    def argue(self, role: str, system: str, user: str, schema: dict) -> dict:
+    def argue(self, role: str, system: str, user: str, schema: dict, validate=None) -> dict:
         if role not in MODEL_ROLES:
             raise ValueError("Unknown model role")
-        return self.client(role).structured(system, user, schema, role.replace("-", "_"))
+        raw = self.client(role).structured(system, user, schema, role.replace("-", "_"))
+        if validate is not None:
+            validate(raw)
+        return raw
 
 
-def configured_reviewer(config: dict):
+def client_for(route: dict, config: dict):
+    """One provider client for a {provider, model} route. Raises ValueError without a key."""
+    if route["provider"] == "openai":
+        return OpenAIReviewer(
+            route["model"],
+            timeout=config.get("model_timeout_seconds", 20),
+            effort=config.get("reasoning_effort"),
+            max_output_tokens=config.get("max_output_tokens", 1200),
+        )
+    if route["provider"] == "local":
+        return LocalReviewer(
+            route["model"],
+            config.get("local_base_url", "http://127.0.0.1:11434/v1"),
+            config.get("local_timeout_seconds", 60),
+            config.get("max_output_tokens", 1200),
+        )
+    return StructuredReviewer(
+        route["provider"],
+        route["model"],
+        config.get("model_timeout_seconds", 20),
+        config.get("max_output_tokens", 1200),
+    )
+
+
+MODEL_PATTERNS = {
+    "openai": OPENAI_MODEL,
+    "anthropic": CLOUD_MODEL,
+    "gemini": CLOUD_MODEL,
+    "local": LOCAL_MODEL,
+}
+
+
+def configured_reviewer(config: dict, state_dir: Path | None = None):
+    routing = config.get("routing") or {}
+    if routing.get("enabled"):
+        import model_router
+
+        model_router.validate_routing(routing, PROVIDERS, MODEL_PATTERNS)
+        if any(tier["provider"] == "local" for tier in routing["tiers"]):
+            loopback_base_url(config.get("local_base_url", "http://127.0.0.1:11434/v1"))
+        folder = state_dir or Path.cwd()
+        return model_router.ModelRouter(
+            config, folder / "learning.sqlite", lambda tier: client_for(tier, config)
+        )
     if config["model_provider"] == "disabled":
         return OfflineReviewer()
     if config["model_provider"] not in PROVIDERS:

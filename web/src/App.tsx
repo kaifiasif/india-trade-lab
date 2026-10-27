@@ -6,6 +6,7 @@ import {
   CalendarClock,
   ChartCandlestick,
   FlaskConical,
+  GraduationCap,
   LayoutDashboard,
   Menu,
   Monitor,
@@ -31,6 +32,7 @@ import { ResearchPage } from "@/pages/Research";
 import { AgentsPage } from "@/pages/Agents";
 import { SetupPage } from "@/pages/Setup";
 import { SettingsPage } from "@/pages/Settings";
+import { LearningPage } from "@/pages/Learning";
 
 const NAV = [
   { id: "today", label: "Today", icon: LayoutDashboard },
@@ -38,6 +40,7 @@ const NAV = [
   { id: "replay", label: "Paper replay", icon: ChartCandlestick },
   { id: "research", label: "Research", icon: FlaskConical },
   { id: "agents", label: "Agents", icon: Bot },
+  { id: "learning", label: "Learning", icon: GraduationCap },
   { id: "setup", label: "Setup", icon: Wrench },
   { id: "settings", label: "Settings", icon: Settings2 },
 ] as const;
@@ -131,6 +134,7 @@ export default function App() {
     replay: <ReplayPage />,
     research: <ResearchPage />,
     agents: <AgentsPage />,
+    learning: <LearningPage />,
     setup: <SetupPage />,
     settings: <SettingsPage />,
   }[route] ?? <TodayPage />;

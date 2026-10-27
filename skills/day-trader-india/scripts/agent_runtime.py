@@ -86,6 +86,17 @@ def review_prompt(role: str, context: dict, reports: list[dict]) -> tuple[str, s
     return system, user
 
 
+class RateLimited(ValueError):
+    """The provider refused for quota (HTTP 429). The router moves to the next tier."""
+
+
+def raise_if_rate_limited(exc: BaseException) -> None:
+    if isinstance(exc, RateLimited):
+        raise exc
+    if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
+        raise RateLimited("Provider quota reached") from None
+
+
 def token_usage(raw: object) -> dict:
     if not isinstance(raw, dict):
         return {"input_tokens": None, "output_tokens": None}
@@ -237,7 +248,8 @@ class OpenAIReviewer:
             handoff["usage"] = token_usage(result.get("usage"))
             handoff["provider"] = "openai"
             return handoff
-        except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+        except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError) as exc:
+            raise_if_rate_limited(exc)
             # Never include provider bodies/headers or raw exception text in research logs.
             raise ValueError("Research model request failed; review is blocked") from None
 

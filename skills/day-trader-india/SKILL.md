@@ -214,6 +214,14 @@ time stops). `scripts/tournament.py` replays them on stored history with
 pessimistic fills and lets a strategy trade only if it is profitable at double
 costs; otherwise the desk sits out. Read [strategy.md](references/strategy.md).
 
+## Learning from mistakes and model routing
+
+`scripts/learning.py settle` grades every agent's calls each evening against the
+session and the paper trades. It writes lessons, stock notes and cooldowns that
+the next morning's agents read, all downgrade-only. `scripts/model_router.py`
+sends simple jobs to a free tier and the judge to a stronger one, with quotas, a
+same-day cache and escalation. Read [learning.md](references/learning.md).
+
 ## Check the setup before trusting a run
 
 `scripts/preflight.py` checks each prerequisite separately and names the exact
