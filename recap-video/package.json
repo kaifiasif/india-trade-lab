@@ -1,7 +1,7 @@
 {
   "name": "india-trade-lab-recap-video",
   "version": "1.0.0",
-  "description": "Renders an animated recap of one recorded paper session from the observatory export.",
+  "description": "Renders the launch video and animated recaps of recorded paper sessions.",
   "private": true,
   "license": "UNLICENSED",
   "engines": {
@@ -23,6 +23,7 @@
     "studio": "remotion studio --props=sample/synthetic-recap.json",
     "render:sample": "remotion render Recap out/synthetic-recap.mp4 --props=sample/synthetic-recap.json",
     "render": "remotion render Recap",
-    "lint": "tsc"
+    "lint": "tsc",
+    "render:launch": "remotion render Launch out/india-trade-lab-launch.mp4"
   }
 }
