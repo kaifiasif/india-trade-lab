@@ -44,9 +44,11 @@ function CountUp({ value, format }: { value: number | null; format: (value: numb
 }
 
 const TIMELINE = [
-  { at: "08:30", minutes: 510, title: "Kite login and checks", who: "You" },
-  { at: "08:40", minutes: 520, title: "Pre-market report", who: "Agents and judge" },
+  { at: "08:30", minutes: 510, title: "Kite login", who: "You" },
+  { at: "08:40", minutes: 520, title: "Overnight scan of all F&O stocks", who: "Code: positioning, events, news" },
+  { at: "09:09", minutes: 549, title: "Open scan, agents and judge", who: "Picks emailed; you confirm the two checks" },
   { at: "09:15", minutes: 555, title: "Market opens", who: "Desk watches picks" },
+  { at: "09:31", minutes: 571, title: "Volume and VWAP check", who: "Code: unconfirmed picks are not entered" },
   { at: "14:30", minutes: 870, title: "Last new entry", who: "Code" },
   { at: "15:15", minutes: 915, title: "Square-off", who: "Code" },
   { at: "16:10", minutes: 970, title: "History and tournament", who: "Code" },
@@ -127,7 +129,7 @@ export function TodayPage() {
           </h2>
           <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
             {!desk
-              ? "No pre-market report yet today. It runs at 08:40 on the server, or you can run it from Setup."
+              ? "No picks yet today. The desk scans at 08:40 and picks at 09:09 on the server, or run it from the desk page."
               : desk.mode === "sit_out"
                 ? `The desk is sitting out today: ${desk.reason}.`
                 : desk.picks.length

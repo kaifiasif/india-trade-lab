@@ -214,6 +214,14 @@ time stops). `scripts/tournament.py` replays them on stored history with
 pessimistic fills and lets a strategy trade only if it is profitable at double
 costs; otherwise the desk sits out. Read [strategy.md](references/strategy.md).
 
+## Market scan
+
+`scripts/market_scan.py` lets the desk pick its own stocks. Code scans every F&O stock
+at 08:40, using futures positioning, delivery, large deals and upcoming events. At
+09:09 it adds the pre-open gap against the Nifty, and the agents judge the best ten.
+At 09:31 it checks each pick's volume and VWAP before entry. Read
+[market-scan.md](references/market-scan.md).
+
 ## Learning from mistakes and model routing
 
 `scripts/learning.py settle` grades every agent's calls each evening against the

@@ -99,6 +99,18 @@ OPTIONAL_CONFIG = {
         "weight_specialists": True,
         "min_graded": 20,
     },
+    # Market scan: the desk finds its own stocks among all F&O names, ranked on signals
+    # that lead the open (positioning, pre-open strength, upcoming events), and checks
+    # volume and VWAP after the first fifteen minutes before any entry.
+    "scan": {
+        "enabled": False,
+        "shortlist": 25,
+        "max_gap_up_pct": 3.0,
+        "max_gap_down_pct": 1.5,
+        "event_window_days": 5,
+        "min_rvol": 1.5,
+        "require_confirmation": True,
+    },
     # Smart routing: simple jobs to free tiers, hard ones to the strongest tier allowed,
     # with quotas you enter, a same-day cache and escalation on bad answers.
     "routing": {
@@ -112,7 +124,9 @@ OPTIONAL_CONFIG = {
         "max_escalations_per_day": 10,
     },
 }
-NESTED_DEFAULTS = ("debate", "memory", "selection", "autopilot", "strategy", "learning", "routing")
+NESTED_DEFAULTS = (
+    "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
+)  # fmt: skip
 
 DEFAULT_CONFIG = {
     **OPTIONAL_CONFIG,
@@ -330,6 +344,23 @@ class DailyCoordinator:
             )
         if any(type(value) is not bool for value in cfg["autopilot"].values()):
             raise ValueError("Autopilot settings must be true or false")
+        scan = cfg["scan"]
+        if (
+            type(scan["enabled"]) is not bool
+            or type(scan["require_confirmation"]) is not bool
+            or type(scan["shortlist"]) is not int
+            or not 10 <= scan["shortlist"] <= 50
+            or type(scan["event_window_days"]) is not int
+            or not 1 <= scan["event_window_days"] <= 10
+            or any(
+                not isinstance(scan[key], (int, float)) or not 0 < scan[key] <= 10
+                for key in ("max_gap_up_pct", "max_gap_down_pct", "min_rvol")
+            )
+        ):
+            raise ValueError(
+                "scan needs true/false switches, a shortlist of 10-50, an event window of "
+                "1-10 days and gap/volume limits between 0 and 10"
+            )
         learn = cfg["learning"]
         if any(type(learn[key]) is not bool for key in learn if key != "min_graded") or (
             type(learn["min_graded"]) is not int or not 5 <= learn["min_graded"] <= 500
@@ -1019,8 +1050,10 @@ def main() -> int:
     try:
         if args.command == "init":
             args.config.parent.mkdir(parents=True, exist_ok=True)
+            # New projects let the desk scan for its own stocks every morning.
+            config = {**DEFAULT_CONFIG, "scan": {**DEFAULT_CONFIG["scan"], "enabled": True}}
             with args.config.open("x", encoding="utf-8") as handle:
-                handle.write(json.dumps(DEFAULT_CONFIG, indent=2) + "\n")
+                handle.write(json.dumps(config, indent=2) + "\n")
             print(
                 "Created private paper-research configuration; populate sourced inputs before running"
             )

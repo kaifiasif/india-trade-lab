@@ -41,9 +41,10 @@ from your phone.
 
 | When (IST) | What happens |
 |---|---|
-| 08:30 | You log in to Kite and confirm two checks |
-| 08:40 | Agents and the judge pick stocks; the report is emailed |
-| 09:15–15:15 | Proven strategies trade the picks in the paper book; code sizes every trade |
+| 08:30 | You log in to Kite |
+| 08:40 | Code scans every F&O stock: futures positioning, delivery, large deals, upcoming events |
+| 09:09 | Pre-open gap against the Nifty; agents and the judge pick from the best ten; picks are emailed |
+| 09:15–15:15 | Picks that pass the 09:31 volume and VWAP check are traded in the paper book; code sizes every trade |
 | 15:15 | Everything is squared off |
 | 16:10 | History is saved, strategies are re-tested at double costs, and agents are graded |
 
@@ -52,6 +53,7 @@ out and records no trades. That is the safe outcome, not a fault.
 
 ## What it does
 
+- **Market scan:** the desk picks its own stocks from every F&O name, on signals that lead the open, not only yesterday's news. See [market-scan.md](skills/day-trader-india/references/market-scan.md).
 - **Pre-market report:** trend, RSI, sector moves, liquidity, headline sentiment and broker calls for each stock.
 - **Agents:** six specialists, a risk scout, a setup planner and a judge. Agents can only narrow or veto; code decides size.
 - **Strategies:** an opening-range breakout and a VWAP pullback, with breakeven, trailing and time stops.

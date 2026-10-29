@@ -79,6 +79,9 @@ class LearningStore:
                   UNIQUE(scope, subject, session, kind));
                 CREATE TABLE IF NOT EXISTS stock_notes (symbol TEXT PRIMARY KEY, as_of TEXT,
                   note TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS signals (session TEXT, symbol TEXT, buildup TEXT,
+                  gap_pct REAL, rs_pct REAL, delivery_pct REAL, picked INTEGER,
+                  PRIMARY KEY(session, symbol));
                 """
             )
 
@@ -98,6 +101,7 @@ class LearningStore:
         """Record every stance in one pre-market report. Reruns of the same day replace it."""
         session = str(report.get("session_date", ""))
         selection = report.get("selection") or {}
+        self._ingest_signals(session, report)
         if not session or selection.get("mode") != "judge":
             return 0  # Only reports where the agents actually ran carry views to grade.
         rows: list[tuple] = []
@@ -136,6 +140,26 @@ class LearningStore:
             )
         return len(rows)
 
+    def _ingest_signals(self, session: str, report: dict) -> None:
+        """The scan's leading signals for every candidate, to learn which ones held up."""
+        watching = set(report.get("watching") or [])
+        rows = []
+        for item in report.get("candidates") or []:
+            signals = item.get("signals")
+            if not session or not signals:
+                continue
+            opening = signals.get("opening") or {}
+            position = signals.get("positioning") or {}
+            rows.append((
+                session, item["symbol"], position.get("buildup"), opening.get("gap_pct"),
+                opening.get("rs_vs_nifty_pct"), position.get("delivery_pct"),
+                int(item["symbol"] in watching),
+            ))  # fmt: skip
+        if rows:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM signals WHERE session=?", (session,))
+                conn.executemany("INSERT OR REPLACE INTO signals VALUES (?,?,?,?,?,?,?)", rows)
+
     def ingest_reports(self, folder: Path, as_of: dt.datetime) -> int:
         count = 0
         for path in sorted(folder.glob("premarket-*.json")):
@@ -148,37 +172,30 @@ class LearningStore:
         return count
 
     def record_outcomes(self, history_db: Path, as_of: dt.datetime) -> int:
-        """Session open, high, low and close for every viewed stock whose day is complete."""
-        if not history_db.is_file():
-            return 0
+        """Session open, high, low and close for every graded stock whose day is complete.
+
+        Five-minute history is used when stored; otherwise the market scan's daily candles
+        (``scan.sqlite`` beside it), which cover every F&O stock.
+        """
         with self._connect() as conn:
             wanted = conn.execute(
-                "SELECT DISTINCT v.session, v.symbol FROM views v LEFT JOIN outcomes o "
-                "ON o.session=v.session AND o.symbol=v.symbol WHERE o.symbol IS NULL"
+                "SELECT DISTINCT w.session, w.symbol FROM (SELECT session, symbol FROM views "
+                "UNION SELECT session, symbol FROM signals) w LEFT JOIN outcomes o "
+                "ON o.session=w.session AND o.symbol=w.symbol WHERE o.symbol IS NULL"
             ).fetchall()
+        scan_db = history_db.parent / "scan.sqlite"
         found = []
-        with contextlib.closing(sqlite3.connect(history_db, timeout=10)) as history:
-            for row in wanted:
-                hit = history.execute(
-                    "SELECT close_at, payload FROM sessions WHERE symbol=? AND date=? "
-                    "AND kind='broker_export'",
-                    (row["symbol"], row["session"]),
-                ).fetchone()
-                if not hit or dt.datetime.fromisoformat(hit[0]) > as_of:
-                    continue
-                bars = json.loads(hit[1]).get("bars") or []
-                if not bars:
-                    continue
-                first = float(bars[0]["open"])
-                high = max(float(bar["high"]) for bar in bars)
-                low = min(float(bar["low"]) for bar in bars)
-                close = float(bars[-1]["close"])
-                found.append((
-                    row["session"], row["symbol"], first, high, low, close,
-                    round(100 * (close / first - 1), 3), round(100 * (high / first - 1), 3),
-                    round(100 * (low / first - 1), 3),
-                    _stamp(dt.datetime.fromisoformat(hit[0])),
-                ))  # fmt: skip
+        for row in wanted:
+            day = _session_ohlc(history_db, scan_db, row["symbol"], row["session"])
+            if day is None or dt.datetime.fromisoformat(day["close_at"]) > as_of:
+                continue
+            first, high, low, close = day["open"], day["high"], day["low"], day["close"]
+            found.append((
+                row["session"], row["symbol"], first, high, low, close,
+                round(100 * (close / first - 1), 3), round(100 * (high / first - 1), 3),
+                round(100 * (low / first - 1), 3),
+                _stamp(dt.datetime.fromisoformat(day["close_at"])),
+            ))  # fmt: skip
         with self._connect() as conn:
             conn.executemany("INSERT OR REPLACE INTO outcomes VALUES (?,?,?,?,?,?,?,?,?,?)", found)
         return len(found)
@@ -385,6 +402,32 @@ class LearningStore:
                 }
         return records
 
+    def signal_record(self, as_of: dt.datetime, minimum: int = 1) -> list[dict]:
+        """How stocks with each leading signal actually did from the open to the close."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT s.buildup, s.rs_pct, o.ret_pct FROM signals s JOIN outcomes o "
+                "ON o.session=s.session AND o.symbol=s.symbol WHERE o.known_at<=?",
+                (_stamp(as_of),),
+            ).fetchall()
+        groups: dict[str, list[float]] = {}
+        for buildup_label, rs, ret in rows:
+            if buildup_label:
+                groups.setdefault(f"futures: {buildup_label}", []).append(ret)
+            if rs is not None:
+                band = "strong" if rs > 0.3 else "weak" if rs < -0.3 else "in line"
+                groups.setdefault(f"at the open: {band} vs Nifty", []).append(ret)
+        return [
+            {
+                "signal": name,
+                "count": len(values),
+                "mean_ret_pct": round(statistics.mean(values), 2),
+                "up_share": round(sum(value > 0 for value in values) / len(values), 2),
+            }
+            for name, values in sorted(groups.items())
+            if len(values) >= minimum
+        ]
+
     def context(self, roles: list[str], symbols: list[str], as_of: dt.datetime,
                 options: dict) -> dict:  # fmt: skip
         """Everything the morning's agents may learn from, all known before ``as_of``."""
@@ -428,6 +471,7 @@ class LearningStore:
                     # 50% accuracy keeps weight 1; the range is clamped to 0.5-1.5.
                     weights[role] = round(min(1.5, max(0.5, 2 * record["accuracy"])), 2)
         return {
+            "signal_record": self.signal_record(as_of, minimum=10),
             "lessons": {role: items for role, items in lessons.items() if items},
             "stock_notes": notes,
             "cooldowns": cooldowns,
@@ -457,6 +501,7 @@ class LearningStore:
             "lessons": recent,
             "stock_notes": sorted(notes, key=lambda note: note["symbol"]),
             "finetune": self.finetune_status(as_of),
+            "signal_record": self.signal_record(as_of),
         }
 
     # ---------- fine-tuning ----------
@@ -538,6 +583,38 @@ class LearningStore:
                 (held if target == "eval" else train).write(line + "\n")
                 counts[target] += 1
         return {"role": role, **counts, "files": {k: str(v) for k, v in paths.items()}}
+
+
+def _session_ohlc(history_db: Path, scan_db: Path, symbol: str, session: str) -> dict | None:
+    if history_db.is_file():
+        with contextlib.closing(sqlite3.connect(history_db, timeout=10)) as history:
+            hit = history.execute(
+                "SELECT close_at, payload FROM sessions WHERE symbol=? AND date=? "
+                "AND kind='broker_export'",
+                (symbol, session),
+            ).fetchone()
+        bars = json.loads(hit[1]).get("bars") if hit else None
+        if bars:
+            return {
+                "close_at": hit[0],
+                "open": float(bars[0]["open"]),
+                "high": max(float(bar["high"]) for bar in bars),
+                "low": min(float(bar["low"]) for bar in bars),
+                "close": float(bars[-1]["close"]),
+            }
+    if scan_db.is_file():
+        with contextlib.closing(sqlite3.connect(scan_db, timeout=10)) as scan:
+            try:
+                hit = scan.execute(
+                    "SELECT open, high, low, close FROM daily WHERE symbol=? AND date=?",
+                    (symbol, session),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                hit = None
+        if hit and hit[0]:
+            return {"close_at": f"{session}T15:30:00+05:30", "open": hit[0], "high": hit[1],
+                    "low": hit[2], "close": hit[3]}  # fmt: skip
+    return None
 
 
 def _stamp(moment: dt.datetime) -> str:

@@ -221,6 +221,14 @@ class SetupApi:
             model_ready = provider in ("disabled", "local") or bool(
                 provider_key and secrets[provider_key]["set"]
             )
+        scanning = bool((settings.get("scan") or {}).get("enabled"))
+        if scanning:
+            # The desk picks its own stocks each morning; the list only seeds strategy history.
+            stocks_ready = (self.data_dir / "EQUITY_L.csv").is_file() and universe["exists"]
+            stocks_detail = "Upload NSE's stock list and pick 1-3 stocks to seed strategy testing; the daily scan picks the rest"
+        else:
+            stocks_ready = universe["exists"] and universe.get("age_days", 99) <= 30
+            stocks_detail = "NSE stock list plus today's Kite instrument list"
         today = str(dt.datetime.now(IST).date())
         try:
             attested = json.loads(
@@ -258,7 +266,7 @@ class SetupApi:
             ("kite_login", "Today's Kite login", kite["token"]["today"], "2FA login; tokens expire every morning"),
             ("email", "Email delivery", email["server"] and email["password"], "Mail server, sender and app password"),
             ("model", "Research model", model_ready, "Optional: the judge and agents need one"),
-            ("stocks", "Choose stocks", universe["exists"] and universe.get("age_days", 99) <= 30, "NSE stock list plus today's Kite instrument list"),
+            ("stocks", "Choose stocks", stocks_ready, stocks_detail),
             ("history", "Load history", enough, "At least 50 complete sessions per stock"),
             ("tournament", "Run the tournament", tournament["ran"], "Decides which strategies may trade"),
             ("book", "Create the paper book", (self.data_dir / "paper.sqlite").is_file(), "Virtual cash and loss limits"),
@@ -380,7 +388,9 @@ class SetupApi:
 
         created = []
         if not self.config.is_file():
-            self.config.write_text(json.dumps(DEFAULT_CONFIG, indent=2) + "\n", encoding="utf-8")
+            # Projects made from the dashboard let the desk scan for its own stocks.
+            config = {**DEFAULT_CONFIG, "scan": {**DEFAULT_CONFIG["scan"], "enabled": True}}
+            self.config.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
             created.append("pipeline.json")
         calendar = self.data_dir / "sessions.json"
         if not calendar.is_file():

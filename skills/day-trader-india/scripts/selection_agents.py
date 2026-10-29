@@ -97,7 +97,8 @@ BRIEFS = {
         "Judge whether the dated headlines and filings describe a material event for each "
         "stock (results, orders, guidance, regulatory action, management change, fund raise), "
         "and whether it is good or bad for a long holder. Old or generic market headlines are "
-        "not events."
+        "not events. An event already priced in is weaker than one still ahead: note any "
+        "results, board meeting or ex-date in the next five days."
     ),
     "sentiment-analyst": (
         "Each headline carries a word-list score. Decide whether the overall tone is genuine "
@@ -107,7 +108,9 @@ BRIEFS = {
     "technical-analyst": (
         "Read trend, RSI and returns computed from stored sessions. Positive means an uptrend "
         "with momentum that is not stretched; overbought RSI is a reason for caution, not "
-        "strength. Do not forecast."
+        "strength. When supplied, today's pre-open gap and its strength against the Nifty "
+        "and the sector, and the futures positioning, describe the open and matter more "
+        "than last week's returns. Do not forecast."
     ),
     "sector-analyst": (
         "Judge whether the stock's sector index is supporting or fighting a long position. "
@@ -115,8 +118,11 @@ BRIEFS = {
     ),
     "liquidity-analyst": (
         "Judge whether traded value and market-cap tier are comfortably above the desk's "
-        "floor for a clean intraday fill. F&O eligibility is context only: this desk trades "
-        "cash equity and never takes a derivative position."
+        "floor for a clean intraday fill. When supplied, read the futures positioning: fresh "
+        "long build-up or short covering, delivery percentage and net buying in large deals "
+        "show real participation; short build-up or long unwinding argue against a long. "
+        "F&O data is context only: this desk trades cash equity and never takes a "
+        "derivative position."
     ),
     "brokerage-analyst": (
         "Read broker calls stated in headlines (broker, rating, target). The note itself was "
@@ -293,6 +299,34 @@ def evidence_catalogue(candidate: dict) -> dict[str, dict[str, Any]]:
                 "headline": call["title"],
                 "published_at": call.get("published_at"),
                 "basis": call["basis"],
+            },
+        }
+    signals = candidate.get("signals")
+    if signals:
+        position = signals["positioning"]
+        catalogue[f"{symbol}#positioning"] = {
+            "roles": ["liquidity-analyst", "technical-analyst"],
+            "facts": {
+                "as_of": "previous session close",
+                "futures_buildup": position.get("buildup"),
+                "futures_oi_change_pct": position.get("oi_change_pct"),
+                "price_change_pct": position.get("price_change_pct"),
+                "put_call_oi_ratio": position.get("pcr"),
+                "largest_call_oi_strike_above": position.get("call_wall"),
+                "largest_put_oi_strike_below": position.get("put_wall"),
+                "delivery_pct": position.get("delivery_pct"),
+                "large_deals": position.get("deals"),
+            },
+        }
+        if signals.get("opening"):
+            catalogue[f"{symbol}#opening"] = {
+                "roles": ["technical-analyst", "sector-analyst"],
+                "facts": {"as_of": "pre-open auction, today", **signals["opening"]},
+            }
+        catalogue[f"{symbol}#events"] = {
+            "roles": ["news-analyst"],
+            "facts": {
+                "upcoming_events_next_5_days": signals["events"] or "none found",
             },
         }
     return catalogue
@@ -490,7 +524,10 @@ def judge_prompt(
         "fewer, or none, is a correct answer on a weak day. Every stock offered already passed "
         "the desk's liquidity, size and history filters. Explain each pick in under 80 words. "
         "You may pick only finalists: your sub-agents (a risk scout and a setup planner) have "
-        "examined each one. For every pick, name the proven strategy to trade it with."
+        "examined each one. For every pick, name the proven strategy to trade it with. "
+        "Weigh what leads the open (pre-open strength against the Nifty and sector, fresh "
+        "futures positioning, an event still ahead) above news the market has already "
+        "priced. Code checks volume and VWAP fifteen minutes after the open before any entry."
     )
     stocks = []
     for candidate in pool:
@@ -533,6 +570,11 @@ def judge_prompt(
             "task": f"Pick at most {max_picks} finalists to watch. Cite evidence IDs for each.",
             **_learned_for(JUDGE, learned),
             **({"specialist_track_records": specialist_records} if specialist_records else {}),
+            **(
+                {"leading_signal_track_record": learned["signal_record"]}
+                if learned and learned.get("signal_record")
+                else {}
+            ),
             "stocks": stocks,
         },
         default=str,

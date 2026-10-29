@@ -160,7 +160,38 @@ def desk_state(directory: Path) -> dict[str, Any]:
                 "strategies": list((selection.get("strategies") or {}).keys()),
                 "assessed": len(report.get("candidates") or []),
                 "pool": len(selection.get("pool") or []),
+                "scan": report.get("scan"),
+                "ranked": [
+                    {
+                        "symbol": item.get("symbol"),
+                        "score": (item.get("score") or {}).get("total"),
+                        "eligible": item.get("eligible"),
+                        "watch": item.get("symbol") in (report.get("watching") or []),
+                        "buildup": ((item.get("signals") or {}).get("positioning") or {}).get(
+                            "buildup"
+                        ),
+                        "delivery_pct": ((item.get("signals") or {}).get("positioning") or {}).get(
+                            "delivery_pct"
+                        ),
+                        "gap_pct": ((item.get("signals") or {}).get("opening") or {}).get(
+                            "gap_pct"
+                        ),
+                        "rs_pct": ((item.get("signals") or {}).get("opening") or {}).get(
+                            "rs_vs_nifty_pct"
+                        ),
+                        "events": (item.get("signals") or {}).get("events") or [],
+                    }
+                    for item in (report.get("candidates") or [])[:12]
+                    if item.get("signals")
+                ],
             }
+            try:
+                checked = json.loads(
+                    (directory / f"confirm-{report.get('session_date')}.json").read_text("utf-8")
+                )
+                result["report"]["confirmation"] = checked.get("picks")
+            except (OSError, ValueError):
+                result["report"]["confirmation"] = None
     except (OSError, ValueError, TypeError, AttributeError):
         result["report"] = None
     try:

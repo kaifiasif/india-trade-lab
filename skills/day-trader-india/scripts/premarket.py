@@ -151,8 +151,15 @@ def score(candidate: dict, settings: dict) -> dict[str, Any]:
         )
     else:
         award("headline tone", 0.0, f"only {mood['scored']} scored headlines; too few to weigh")
+    maximum = 12.0
+    signals = candidate.get("signals")
+    if signals:
+        # Scan factors that lead the open: futures positioning, delivery, large deals,
+        # upcoming events and pre-open strength against the Nifty.
+        parts.extend(signals["scan_parts"])
+        maximum += 5.0
     total = sum(part["points"] for part in parts)
-    return {"total": round(total, 2), "parts": parts, "maximum": 12.0}
+    return {"total": round(total, 2), "parts": parts, "maximum": maximum}
 
 
 def hard_filters(candidate: dict, settings: dict) -> list[str]:
@@ -197,7 +204,13 @@ def build(
         "min_market_cap_tier": chooser["min_market_cap_tier"],
         "max_reference_age_days": chooser["max_reference_age_days"],
     }
-    universe = read_json(coordinator.path("universe"))
+    scan = scan_inputs(coordinator, clock)
+    if scan:
+        instruments = scan["instruments"]
+        universe = {"source": f"market scan of {scan['scanned']} F&O stocks"}
+    else:
+        universe = read_json(coordinator.path("universe"))
+        instruments = universe.get("instruments", [])[:20]
     history = HistoryStore(coordinator.path("history_db"))
     reference = ReferenceStore(coordinator.path("reference_db"))
     try:
@@ -205,11 +218,15 @@ def build(
     except (OSError, ValueError):
         news = {}
     candidates, blocked = [], []
-    for instrument in universe.get("instruments", [])[:20]:
+    for instrument in instruments:
         symbol = instrument.get("symbol", "")
         facts = reference.lookup(symbol, clock)
         try:
-            rows = technical.daily_bars(history, symbol, clock)
+            rows = (
+                scan["store"].bars(symbol, clock.date())
+                if scan
+                else technical.daily_bars(history, symbol, clock)
+            )
             index_name = facts.get("sector_index")
             sector = (
                 reference.sector_performance(index_name, clock)
@@ -220,18 +237,18 @@ def build(
                     + (facts.get("sector") or "an unknown sector"),
                 }
             )
-            candidates.append(
-                describe(
-                    symbol,
-                    instrument.get("name", ""),
-                    facts,
-                    rows,
-                    sector,
-                    news.get(symbol, []),
-                    clock,
-                    settings,
-                )
+            entry = describe(
+                symbol,
+                instrument.get("name", ""),
+                facts,
+                rows,
+                sector,
+                news.get(symbol, []),
+                clock,
+                settings,
+                instrument.get("signals"),
             )
+            candidates.append(entry)
         except (ValueError, KeyError, sqlite3.Error) as exc:
             blocked.append({"symbol": symbol, "reason": str(exc)})
     learned = learned_context(coordinator, [item["symbol"] for item in candidates], clock)
@@ -290,6 +307,9 @@ def build(
         clock,
         universe.get("source"),
     )
+    if scan:
+        report["scan"] = scan["summary"]
+        report["universe_written"] = write_picks_universe(coordinator, report["watching"], clock)
     report["learning"] = {
         "lessons": sum(len(items) for items in learned["lessons"].values()),
         "stock_notes": len(learned["stock_notes"]),
@@ -299,9 +319,94 @@ def build(
     return report
 
 
+def scan_inputs(coordinator: Any, clock: dt.datetime) -> dict | None:
+    """Candidates from this morning's market scan, best first; None when the scan is off."""
+    import market_scan
+
+    options = {**market_scan.DEFAULTS, **coordinator.config.get("scan", {})}
+    if not options["enabled"]:
+        return None
+    folder = coordinator.config_path.parent
+    try:
+        record = json.loads(market_scan.scan_path(folder, clock.date()).read_text("utf-8"))
+    except (OSError, ValueError):
+        raise ValueError(
+            "This morning's market scan has not run; run market_scan.py overnight first"
+        ) from None
+    opened = record.get("stage") == "open"
+    rows = record["ranked"] if opened else record["shortlist"]
+    instruments = [
+        {
+            "symbol": row["symbol"],
+            "name": row["name"],
+            "signals": {
+                "positioning": row["positioning"],
+                "opening": row.get("opening"),
+                "events": row["events"],
+                "scan_parts": [
+                    part
+                    for part in row["score"]["parts"]
+                    if part["factor"] not in ("trend", "momentum")
+                ],
+            },
+        }
+        for row in rows
+    ]
+    return {
+        "instruments": instruments,
+        "store": market_scan.ScanStore(folder / "scan.sqlite"),
+        "scanned": record["scanned"],
+        "summary": {
+            "stage": record["stage"],
+            "scanned": record["scanned"],
+            "passed": record["passed"],
+            "dropped_by": record.get("dropped_by", {}),
+            "dropped_at_open": record.get("dropped_at_open", []),
+            "events_screened": record.get("events_screened", False),
+            "notes": record.get("notes", [])
+            + ([] if opened else ["the open stage did not run; ranked on overnight signals only"]),
+        },
+    }
+
+
+def write_picks_universe(coordinator: Any, watching: list[str], clock: dt.datetime) -> str:
+    """Point the session worker at today's picks. Needs NSE's EQUITY_L.csv for the ISINs."""
+    if not watching:
+        return "no picks today; the stock list was left unchanged"
+    import make_universe
+
+    folder = coordinator.config_path.parent
+    equity = folder / "EQUITY_L.csv"
+    if not equity.is_file():
+        return "upload NSE's EQUITY_L.csv in Setup so the desk can trade the picks"
+    dump = folder / f"instruments-{clock.date()}.csv.gz"
+    try:
+        tokens = make_universe.parse_kite_dump(dump.read_bytes())
+        universe = make_universe.build_universe(
+            [symbol.split(":")[-1] for symbol in watching[:3]],
+            make_universe.parse_equity_list(equity),
+            tokens,
+            clock,
+        )
+    except (OSError, ValueError, KeyError) as exc:
+        return f"the stock list was not updated ({str(exc)[:120]})"
+    universe["source"] = f"market scan picks for {clock.date()}"
+    (folder / coordinator.config["universe"]).write_text(
+        json.dumps(universe, indent=2) + "\n", encoding="utf-8"
+    )
+    return "the session worker now watches " + ", ".join(watching[:3])
+
+
 def learned_context(coordinator: Any, symbols: list[str], clock: dt.datetime) -> dict:
     """What earlier sessions taught, known before ``clock``. Empty when learning is off."""
-    empty = {"lessons": {}, "stock_notes": {}, "cooldowns": {}, "track_records": {}, "weights": {}}
+    empty = {
+        "lessons": {},
+        "stock_notes": {},
+        "cooldowns": {},
+        "track_records": {},
+        "weights": {},
+        "signal_record": [],
+    }
     options = coordinator.config["learning"]
     if not options["enabled"]:
         return empty
@@ -327,8 +432,13 @@ def describe(
     news_items: list[dict],
     clock: dt.datetime,
     settings: dict,
+    signals: dict | None = None,
 ) -> dict[str, Any]:
-    """One stock's report entry from its reference facts, daily bars, sector and headlines."""
+    """One stock's report entry from its reference facts, daily bars, sector and headlines.
+
+    ``signals`` carries the market scan's positioning, opening strength and upcoming
+    events when the scan chose this stock; they join the score and the evidence.
+    """
     snapshot = technical.snapshot(rows)
     values = snapshot["values"]
     entry: dict[str, Any] = {
@@ -362,6 +472,8 @@ def describe(
         "sector": sector,
         "news": sentiment.summarize(news_items, clock.isoformat()),
     }
+    if signals:
+        entry["signals"] = signals
     entry["score"] = score(entry, settings)
     entry["filters"] = hard_filters(entry, settings)
     entry["eligible"] = not entry["filters"]
@@ -722,8 +834,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--html", type=Path, help="Write the page here as well")
     parser.add_argument("--email", action="store_true", help="Send it over configured SMTP")
     parser.add_argument("--json", action="store_true", help="Print the full report as JSON")
+    parser.add_argument(
+        "--skip-when-scan",
+        action="store_true",
+        help="Do nothing when the market scan is on (its report runs after the pre-open)",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.skip_when_scan:
+            from decision_pipeline import DailyCoordinator
+
+            if DailyCoordinator(args.config).config["scan"]["enabled"]:
+                print("The market scan is on: the report is built at 09:09 after the pre-open.")
+                return 0
         clock = dt.datetime.fromisoformat(args.as_of) if args.as_of else None
         report = build(args.config, clock)
         page = render(report)

@@ -67,13 +67,39 @@ UNIT
 
 unit india-trade-lab-premarket.timer <<'UNIT'
 [Unit]
-Description=Pre-market report at 08:40 IST on weekdays
+Description=Overnight scan and news at 08:40 IST on weekdays
 [Timer]
 OnCalendar=Mon..Fri *-*-* 08:40:00
 Persistent=false
 [Install]
 WantedBy=timers.target
 UNIT
+
+for stage in open confirm; do
+  case "$stage" in
+    open) when="09:09:30"; what="Open scan, agents and judge after the pre-open auction" ;;
+    confirm) when="09:31:00"; what="Volume and VWAP check of the judge's picks" ;;
+  esac
+  unit "india-trade-lab-$stage.service" <<UNIT
+[Unit]
+Description=India Trade Lab: $what
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+$common
+ExecStart=$REPO/deploy/oracle/run.sh $stage
+UNIT
+  unit "india-trade-lab-$stage.timer" <<UNIT
+[Unit]
+Description=$what at $when IST on weekdays
+[Timer]
+OnCalendar=Mon..Fri *-*-* $when
+Persistent=false
+[Install]
+WantedBy=timers.target
+UNIT
+done
 
 unit india-trade-lab-market.service <<UNIT
 [Unit]
@@ -141,7 +167,8 @@ sudo chmod 440 /etc/sudoers.d/india-trade-lab
 sudo visudo -cf /etc/sudoers.d/india-trade-lab >/dev/null
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now india-trade-lab-premarket.timer india-trade-lab-market.timer \
+sudo systemctl enable --now india-trade-lab-premarket.timer india-trade-lab-open.timer \
+  india-trade-lab-confirm.timer india-trade-lab-market.timer \
   india-trade-lab-aftermarket.timer india-trade-lab-observatory.service
 
 cat <<DONE

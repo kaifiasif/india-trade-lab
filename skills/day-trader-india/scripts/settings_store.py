@@ -30,7 +30,7 @@ EDITABLE = {
     "min_turnover_inr", "daily_profit_goal_inr", "target_r",
     "fee_bps", "fee_flat_inr", "slippage_bps",
     "debate", "memory", "selection", "autopilot", "strategy", "market_feeds",
-    "learning", "routing",
+    "learning", "routing", "scan",
     "min_scored_headlines",
     # Email
     "smtp_host", "smtp_port", "smtp_user", "email_from", "email_to",

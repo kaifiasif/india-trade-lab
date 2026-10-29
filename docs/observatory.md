@@ -15,7 +15,7 @@ Python backend ship together in the portable `day-trader-india` skill.
 | Page | What it shows or does |
 | --- | --- |
 | Today | Greeting, setup progress, the paper book, today's picks, the IST session timeline and the strategy tournament |
-| Pre-market desk | The judge's picks and drops, each specialist's one-line view, and buttons to run news, the report (with or without email) and the tournament |
+| Pre-market desk | The judge's picks and drops, each specialist's one-line view, today's scan (how many F&O stocks were scanned and why they were dropped, positioning, pre-open strength and the 09:31 check for each ranked stock), and buttons to run every stage |
 | Paper replay | A synthetic NSE:DEMO session through the real engine: five pipeline stages, the price with fills, stop and target, paper calls and engine events, with pause and halt |
 | Research | Recorded research reviews, how past ratings settled, history coverage and the screened watchlist |
 | Agents | The sixteen-member desk and what each one is allowed to do |

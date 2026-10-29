@@ -37,6 +37,21 @@ KINDS: dict[str, dict[str, Any]] = {
         "argv": ["data_sync.py", "--days", "180", "--max-symbols", "3"],
         "timeout": 3600,
     },
+    "scan_overnight": {
+        "label": "Overnight scan of all F&O stocks",
+        "argv": ["market_scan.py", "overnight"],
+        "timeout": 900,
+    },
+    "scan_open": {
+        "label": "Open scan (after 09:08)",
+        "argv": ["market_scan.py", "open"],
+        "timeout": 300,
+    },
+    "scan_confirm": {
+        "label": "09:31 check of the picks",
+        "argv": ["market_scan.py", "confirm"],
+        "timeout": 300,
+    },
     "learn": {
         "label": "Grade the agents and learn",
         "argv": ["learning.py", "settle"],
@@ -92,7 +107,7 @@ class JobRunner:
         if script == "reference.py":
             return [self.python, str(HERE / script), "--db",
                     str(self.config.parent / "reference.sqlite"), *rest]  # fmt: skip
-        if script == "learning.py":  # Subcommands follow the top-level --config.
+        if script in ("learning.py", "market_scan.py"):  # Subcommands follow --config.
             return [self.python, str(HERE / script), "--config", str(self.config), *rest]
         return [self.python, str(HERE / script), *rest, "--config", str(self.config)]
 

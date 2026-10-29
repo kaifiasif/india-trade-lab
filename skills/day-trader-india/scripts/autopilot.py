@@ -54,6 +54,24 @@ def _write(conn: sqlite3.Connection, state: dict) -> None:
     conn.execute("INSERT OR REPLACE INTO book VALUES (1, ?)", (json.dumps(state),))
 
 
+def opening_gate(coordinator: Any, symbol: str, clock: dt.datetime) -> str:
+    """With the market scan on, enter only picks the 09:31 check confirmed. Empty means go."""
+    import market_scan
+
+    options = {**market_scan.DEFAULTS, **getattr(coordinator, "config", {}).get("scan", {})}
+    if not options["enabled"] or not options["require_confirmation"]:
+        return ""
+    record = market_scan.confirmation_for(coordinator.config_path.parent, clock.date())
+    if record is None:
+        return "waiting for the 09:31 volume and VWAP check"
+    check = record["picks"].get(symbol)
+    if not check:
+        return "not checked at 09:31"
+    if not check["confirmed"]:
+        return "failed the 09:31 check: " + "; ".join(check["reasons"])
+    return ""
+
+
 def apply(coordinator: Any, report: dict, now: dt.datetime | None = None) -> dict[str, Any]:
     """Record approved paper exits and the selected entry from one coordinator report."""
     settings = getattr(coordinator, "config", {}).get("autopilot") or {}
@@ -95,6 +113,10 @@ def apply(coordinator: Any, report: dict, now: dt.datetime | None = None) -> dic
                 outcome["skipped"].append(
                     {"symbol": symbol, "reason": "not one of today's pre-market judge picks"}
                 )
+                continue
+            gate = opening_gate(coordinator, symbol, clock)
+            if gate:
+                outcome["skipped"].append({"symbol": symbol, "reason": gate})
                 continue
         try:
             with sqlite3.connect(book_path, isolation_level=None, timeout=10) as conn:

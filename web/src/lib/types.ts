@@ -58,6 +58,27 @@ export interface DeskState {
     strategies: string[];
     assessed: number;
     pool: number;
+    scan?: {
+      stage: string;
+      scanned: number;
+      passed: number;
+      dropped_by: Record<string, number>;
+      dropped_at_open: string[];
+      events_screened: boolean;
+      notes: string[];
+    } | null;
+    ranked?: {
+      symbol: string;
+      score: number | null;
+      eligible: boolean;
+      watch: boolean;
+      buildup: string | null;
+      delivery_pct: number | null;
+      gap_pct: number | null;
+      rs_pct: number | null;
+      events: { date: string; purpose: string }[];
+    }[];
+    confirmation?: Record<string, { confirmed: boolean; rvol: number | null; above_vwap: boolean; rs_since_open_pct: number | null; reasons: string[] }> | null;
   } | null;
   scorecard: {
     as_of: string;
