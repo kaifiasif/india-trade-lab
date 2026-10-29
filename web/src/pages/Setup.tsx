@@ -628,7 +628,7 @@ function TournamentStep() {
 
 function BookStep() {
   const { setup: status, refreshSetup, refreshState } = useData();
-  const [values, setValues] = useState({ cash_inr: "100000", risk_inr: "250", daily_loss_inr: "750", position_limit_inr: "15000" });
+  const [values, setValues] = useState({ cash_inr: "200000", risk_inr: "500", daily_loss_inr: "1500", position_limit_inr: "30000" });
   const { busy, run } = useBusy();
   if (status?.book) return <Done>Your paper book exists. It is never overwritten; its journal is sealed with a checksum.</Done>;
   const fields: [keyof typeof values, string, string][] = [

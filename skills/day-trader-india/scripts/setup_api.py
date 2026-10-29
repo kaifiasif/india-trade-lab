@@ -646,11 +646,11 @@ class SetupApi:
             raise ApiError(409, "stocks_required", "Choose your stocks first")
         try:
             book = paper_book.create(
-                str(payload.get("cash_inr", "100000")),
+                str(payload.get("cash_inr", "200000")),
                 ",".join(symbols),
-                str(payload.get("risk_inr", "250")),
-                str(payload.get("daily_loss_inr", "750")),
-                str(payload.get("position_limit_inr", "15000")),
+                str(payload.get("risk_inr", "500")),
+                str(payload.get("daily_loss_inr", "1500")),
+                str(payload.get("position_limit_inr", "30000")),
             )
         except (ValueError, ArithmeticError) as error:
             raise ApiError(422, "invalid", str(error)) from None
