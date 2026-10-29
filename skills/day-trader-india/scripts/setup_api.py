@@ -57,6 +57,7 @@ RATE_PER_MINUTE = {
     "build_universe": 5,
     "save_secret": 20,
     "run_job": 10,
+    "check_openrouter": 6,
 }
 DEFAULT_RATE = 30
 
@@ -205,6 +206,7 @@ class SetupApi:
             "gemini": "GEMINI_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
             "openai": "OPENAI_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
         }.get(provider)
         routing = settings.get("routing") or {}
         if routing.get("enabled"):
@@ -213,6 +215,7 @@ class SetupApi:
                     "gemini": "GEMINI_API_KEY",
                     "anthropic": "ANTHROPIC_API_KEY",
                     "openai": "OPENAI_API_KEY",
+                    "openrouter": "OPENROUTER_API_KEY",
                 }.get(tier.get("provider"))  # fmt: skip
                 for tier in routing.get("tiers", [])
             } - {None}
@@ -331,7 +334,12 @@ class SetupApi:
         routing: dict = {}
         if self.config.is_file():
             try:
-                routing = settings_store.editable_view(self.config)["settings"].get("routing") or {}
+                current = settings_store.editable_view(self.config)["settings"]
+                routing = current.get("routing") or {}
+                if not routing.get("enabled") and current.get("model_provider") == "openrouter":
+                    import model_providers
+
+                    routing = model_providers.openrouter_routing(current)
             except (OSError, ValueError):
                 routing = {}
         summary = (
@@ -495,6 +503,34 @@ class SetupApi:
         if not result.get("sent"):
             raise ApiError(502, "email_failed", result.get("reason", "Email could not be sent"))
         return result, {}, []
+
+    def do_check_openrouter(self, payload: dict, **_: Any):
+        """Free requests left today and spend, as OpenRouter reports them. Never the key."""
+        import openrouter
+
+        key = secret_store.get("OPENROUTER_API_KEY")
+        if not key:
+            raise ApiError(409, "key_required", "Save your OpenRouter API key first")
+        try:
+            status = openrouter.key_status(key)
+        except ValueError:
+            raise ApiError(
+                502, "openrouter_unreachable", "OpenRouter did not answer; check the key"
+            ) from None
+        try:
+            models = openrouter.catalogue(self.data_dir)
+            options = {
+                **openrouter.DEFAULTS,
+                **(settings_store.editable_view(self.config)["settings"].get("openrouter") or {}),
+            }
+            usable = [m for m in models if openrouter.usable(m, options)]
+            status["models"] = {
+                "free": sum(openrouter.is_free(m) for m in usable),
+                "paid_within_caps": sum(openrouter.within_caps(m, options) for m in usable),
+            }
+        except (ValueError, OSError):
+            status["models"] = None
+        return status, {}, []
 
     def do_save_settings(self, payload: dict, **_: Any):
         self._require_project()

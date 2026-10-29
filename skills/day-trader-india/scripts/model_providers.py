@@ -24,7 +24,7 @@ from agent_runtime import (
 
 from broker_data import NoRedirect
 
-PROVIDERS = ("openai", "anthropic", "gemini", "local")
+PROVIDERS = ("openai", "anthropic", "gemini", "local", "openrouter")
 CLOUD_MODEL = r"[A-Za-z0-9_.-]{1,100}"
 OPENAI_MODEL = r"[A-Za-z0-9_.:-]{1,100}"
 LOCAL_MODEL = r"[A-Za-z0-9_.:/-]{1,100}"
@@ -313,6 +313,14 @@ class RoutedReviewer:
 
 def client_for(route: dict, config: dict):
     """One provider client for a {provider, model} route. Raises ValueError without a key."""
+    if route["provider"] == "openrouter":
+        import openrouter
+
+        return openrouter.OpenRouterClient(
+            route["model"],
+            max(20, config.get("model_timeout_seconds", 20)),
+            config.get("max_output_tokens", 1200),
+        )
     if route["provider"] == "openai":
         return OpenAIReviewer(
             route["model"],
@@ -336,6 +344,7 @@ def client_for(route: dict, config: dict):
 
 
 MODEL_PATTERNS = {
+    "openrouter": r"[A-Za-z0-9_.:/-]{1,120}",
     "openai": OPENAI_MODEL,
     "anthropic": CLOUD_MODEL,
     "gemini": CLOUD_MODEL,
@@ -343,8 +352,30 @@ MODEL_PATTERNS = {
 }
 
 
+def openrouter_routing(config: dict) -> dict:
+    """With only an OpenRouter key: free models for simple jobs, a capped paid one for the judge."""
+    options = config.get("openrouter") or {}
+    paid = float(options.get("max_usd_per_day", 0.5)) > 0
+    tiers = [{"name": "free", "provider": "openrouter", "model": "auto:free"}]
+    if paid:
+        tiers.append({"name": "strong", "provider": "openrouter", "model": "auto:paid"})
+    return {
+        "enabled": True,
+        "tiers": tiers,
+        "simple": ["free", "strong"] if paid else ["free"],
+        "complex": ["strong", "free"] if paid else ["free"],
+        "escalate": True,
+        "cache": True,
+        "store_prompts": True,
+        "max_escalations_per_day": 20,
+    }
+
+
 def configured_reviewer(config: dict, state_dir: Path | None = None):
     routing = config.get("routing") or {}
+    if not routing.get("enabled") and config.get("model_provider") == "openrouter":
+        config = {**config, "routing": openrouter_routing(config)}
+        routing = config["routing"]
     if routing.get("enabled"):
         import model_router
 
@@ -352,11 +383,30 @@ def configured_reviewer(config: dict, state_dir: Path | None = None):
         if any(tier["provider"] == "local" for tier in routing["tiers"]):
             loopback_base_url(config.get("local_base_url", "http://127.0.0.1:11434/v1"))
         folder = state_dir or Path.cwd()
+        db = folder / "learning.sqlite"
+
+        def auto_models(tier: dict, role: str, session: str) -> list[str]:
+            import openrouter
+
+            kind = model_router.role_class(role)
+            same_kind = [name for name in MODEL_ROLES if model_router.role_class(name) == kind]
+            return openrouter.choose(
+                openrouter.catalogue(folder),
+                tier["model"],
+                role,
+                session,
+                db,
+                config.get("openrouter"),
+                same_kind,
+            )
+
         return model_router.ModelRouter(
-            config, folder / "learning.sqlite", lambda tier: client_for(tier, config)
+            config, db, lambda tier: client_for(tier, config), auto_models=auto_models
         )
     if config["model_provider"] == "disabled":
         return OfflineReviewer()
     if config["model_provider"] not in PROVIDERS:
-        raise ValueError("Supported research providers: disabled, openai, anthropic, gemini, local")
+        raise ValueError(
+            "Supported research providers: disabled, openrouter, openai, anthropic, gemini, local"
+        )
     return RoutedReviewer(config)

@@ -32,6 +32,7 @@ interface Routing {
 }
 
 const PROVIDERS = [
+  { id: "openrouter", label: "OpenRouter", key: "OPENROUTER_API_KEY", reset: "UTC" },
   { id: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", reset: "America/Los_Angeles" },
   { id: "local", label: "Local model (Ollama)", key: "LOCAL_LLM_API_KEY", reset: "UTC" },
   { id: "anthropic", label: "Anthropic Claude", key: "ANTHROPIC_API_KEY", reset: "UTC" },
@@ -65,7 +66,7 @@ function TierFields({ tier, onChange, title, note }: { tier: Tier; onChange: (ne
           </Select>
         </Field>
         <Field label="Model ID" htmlFor={`${id}-model`}>
-          <Input id={`${id}-model`} className="font-mono" value={tier.model} onChange={(event) => onChange({ ...tier, model: event.target.value.trim() })} placeholder={tier.provider === "local" ? "qwen2.5:7b" : "exact ID from the provider"} />
+          <Input id={`${id}-model`} className="font-mono" value={tier.model} onChange={(event) => onChange({ ...tier, model: event.target.value.trim() })} placeholder={tier.provider === "local" ? "qwen2.5:7b" : tier.provider === "openrouter" ? "auto:free, auto:paid or a model ID" : "exact ID from the provider"} />
         </Field>
         <Field label="Requests per day" htmlFor={`${id}-rpd`} hint="0 means no cap.">
           <Input id={`${id}-rpd`} inputMode="numeric" className="num" value={String(tier.requests_per_day ?? 0)} onChange={(event) => onChange({ ...tier, requests_per_day: number(event.target.value) })} />

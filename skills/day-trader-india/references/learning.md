@@ -120,3 +120,55 @@ every tier fails the desk falls back to the deterministic ranking.
 
 `store_prompts` keeps successful prompts and answers for 180 days, for the
 fine-tune export. They hold market data only. Turn it off to keep none.
+
+## OpenRouter: one key, and the desk picks the models
+
+Runtime: `scripts/openrouter.py`. In Setup → Research model, choose
+**OpenRouter**, paste one key from openrouter.ai, and set a daily dollar cap (or
+choose free models only). In `pipeline.json` this is:
+
+```json
+"model_provider": "openrouter",
+"openrouter": {"max_usd_per_day": 0.5, "max_input_usd_per_mtok": 1.0,
+               "max_output_usd_per_mtok": 4.0, "min_context": 16000}
+```
+
+With routing off, this sets up two tiers by itself:
+
+- `free` (`auto:free`): simple jobs;
+- `strong` (`auto:paid`): the judge, and only when `max_usd_per_day` is above 0.
+
+You can also put `auto:free` or `auto:paid` in your own routing tiers.
+
+**How models are chosen, in plain code, at no token cost:**
+
+1. Once a day, the desk reads OpenRouter's public model list.
+2. It keeps models that:
+   - take and return text;
+   - support strict JSON output;
+   - have a context of at least `min_context`;
+   - have not passed their expiry date.
+3. For `auto:paid`, it also drops models priced over the caps per million
+   tokens. Once the day's spend reaches `max_usd_per_day`, paid models wait
+   until the next day.
+4. It ranks the rest. A starting prior by model family and context is replaced
+   by the desk's own record:
+   - valid-answer rate, after 5 calls;
+   - graded accuracy of that model's views, after 10 graded views;
+   - a penalty for repeated rate limits.
+5. It skips a model that has failed this role three times today.
+6. It tries the top three in order.
+
+Simple jobs alternate between the two best free models by role and day. This
+spreads OpenRouter's per-model free limits and gives both a comparable record.
+
+Requests ask for `provider.require_parameters`, so only endpoints that honour
+strict JSON answer. Every call logs the model actually used and its cost, and
+the Learning page shows both.
+
+**Free-tier limits** (OpenRouter's, at the time of writing):
+
+- 20 requests a minute;
+- 50 a day, or 1,000 a day once you have bought 10 credits.
+
+A desk day uses about 30–60 requests. **Check key** in Setup shows what is left.

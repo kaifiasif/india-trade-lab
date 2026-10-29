@@ -111,6 +111,14 @@ OPTIONAL_CONFIG = {
         "min_rvol": 1.5,
         "require_confirmation": True,
     },
+    # OpenRouter with model_provider "openrouter": the desk picks models itself, free ones
+    # for simple jobs and a paid one under these caps for the judge (0 = free only).
+    "openrouter": {
+        "max_input_usd_per_mtok": 1.0,
+        "max_output_usd_per_mtok": 4.0,
+        "max_usd_per_day": 0.5,
+        "min_context": 16000,
+    },
     # Smart routing: simple jobs to free tiers, hard ones to the strongest tier allowed,
     # with quotas you enter, a same-day cache and escalation on bad answers.
     "routing": {
@@ -126,6 +134,7 @@ OPTIONAL_CONFIG = {
 }
 NESTED_DEFAULTS = (
     "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
+    "openrouter",
 )  # fmt: skip
 
 DEFAULT_CONFIG = {
@@ -361,6 +370,16 @@ class DailyCoordinator:
                 "scan needs true/false switches, a shortlist of 10-50, an event window of "
                 "1-10 days and gap/volume limits between 0 and 10"
             )
+        router_caps = cfg["openrouter"]
+        if (
+            any(
+                not isinstance(router_caps[key], (int, float)) or not 0 <= router_caps[key] <= 100
+                for key in ("max_input_usd_per_mtok", "max_output_usd_per_mtok", "max_usd_per_day")
+            )
+            or type(router_caps["min_context"]) is not int
+            or not 4000 <= router_caps["min_context"] <= 2_000_000
+        ):
+            raise ValueError("openrouter caps must be 0-100 USD and min_context 4,000-2,000,000")
         learn = cfg["learning"]
         if any(type(learn[key]) is not bool for key in learn if key != "min_graded") or (
             type(learn["min_graded"]) is not int or not 5 <= learn["min_graded"] <= 500

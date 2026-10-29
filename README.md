@@ -35,7 +35,7 @@ from your phone.
 
 - Kite Connect: ₹500 a month.
 - Oracle Cloud hosting: ₹0.
-- AI agents: ₹0 on Gemini's free tier.
+- AI agents: ₹0 on OpenRouter's or Gemini's free models. With one OpenRouter key, the desk picks the models itself and keeps paid use under your daily cap.
 
 ## A trading day
 
@@ -58,7 +58,7 @@ out and records no trades. That is the safe outcome, not a fault.
 - **Agents:** six specialists, a risk scout, a setup planner and a judge. Agents can only narrow or veto; code decides size.
 - **Strategies:** an opening-range breakout and a VWAP pullback, with breakeven, trailing and time stops.
 - **Learning:** mistakes become lessons the agents read next morning, and stocks that keep losing sit out for a week.
-- **Smart model routing:** simple jobs go to a free tier, so free quotas last.
+- **Smart model routing:** simple jobs go to free models and the judge to a capped paid one. With OpenRouter, the desk chooses the models on its own record.
 - **Dashboard:** setup, today's picks, replays, research and each agent's track record, in light and dark.
 
 ## What it does not do

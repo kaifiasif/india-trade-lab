@@ -182,6 +182,9 @@ export interface TierUsage {
   tokens: number;
   tokens_per_day: number;
   outcomes: Record<string, number>;
+  /** OpenRouter auto tiers: answered calls per model the desk chose today. */
+  models?: Record<string, number>;
+  cost_usd?: number;
 }
 
 export interface LearningSummary {

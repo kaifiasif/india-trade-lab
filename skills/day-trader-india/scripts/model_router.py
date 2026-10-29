@@ -52,6 +52,10 @@ DEFAULT_ROUTING: dict[str, Any] = {
 KEEP_DAYS = 180
 
 
+def is_auto(tier: dict) -> bool:
+    return tier.get("provider") == "openrouter" and str(tier.get("model", "")).startswith("auto:")
+
+
 def role_class(role: str) -> str:
     if role in SIMPLE_REVIEW_ROLES or MODEL_ROLES.get(role) == "quick":
         return "simple"
@@ -86,6 +90,12 @@ def validate_routing(routing: dict, providers: tuple[str, ...], patterns: dict[s
         provider, model = tier.get("provider"), tier.get("model")
         if provider not in providers:
             raise ValueError(f"routing tier '{name}': provider must be one of {providers}")
+        if (
+            provider == "openrouter"
+            and model.startswith("auto:")
+            and model not in ("auto:free", "auto:paid")
+        ):
+            raise ValueError(f"routing tier '{name}': use auto:free, auto:paid or a model ID")
         if not isinstance(model, str) or not re.fullmatch(patterns[provider], model):
             raise ValueError(f"routing tier '{name}': enter the exact model ID")
         for field, top in (
@@ -124,14 +134,16 @@ class ModelRouter:
         db_path: Path,
         build_client: Callable[[dict], Any],
         clock: Callable[[], dt.datetime] | None = None,
+        auto_models: Callable[[dict, str, str], list[str]] | None = None,
     ) -> None:
         self.routing = {**DEFAULT_ROUTING, **config.get("routing", {})}
         self.tiers = {tier["name"]: tier for tier in self.routing["tiers"]}
         self.build_client = build_client
+        self.auto_models = auto_models
         self.clock = clock or (lambda: dt.datetime.now(dt.timezone.utc))
         self.db_path = db_path
         self.lock = threading.Lock()
-        self.clients: dict[str, Any] = {}
+        self.clients: dict[tuple[str, str], Any] = {}
         self.missing: set[str] = set()
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
@@ -142,6 +154,9 @@ class ModelRouter:
                 "output_tokens INTEGER, latency_ms INTEGER, prompt_sha TEXT, "
                 "system TEXT, user TEXT, response TEXT)"
             )
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(calls)")}
+            if "cost_usd" not in columns:
+                conn.execute("ALTER TABLE calls ADD COLUMN cost_usd REAL")
             conn.execute("CREATE INDEX IF NOT EXISTS calls_tier_at ON calls(tier, at)")
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, day TEXT NOT NULL, "
@@ -191,6 +206,8 @@ class ModelRouter:
             ).fetchone()[0]
             if recent >= tier["requests_per_minute"]:
                 return "per-minute limit reached"
+        if is_auto(tier):
+            return ""  # Auto tiers judge each model separately; see openrouter.choose.
         limited = conn.execute(
             "SELECT at FROM calls WHERE tier=? AND at>=? AND outcome='rate_limited' "
             "ORDER BY at DESC",
@@ -220,15 +237,25 @@ class ModelRouter:
         ).fetchone()[0]
         return used < self.routing["max_escalations_per_day"]
 
-    def _client(self, name: str):
-        if name not in self.clients:
+    def _client(self, name: str, model: str):
+        if (name, model) not in self.clients:
             tier = self.tiers[name]
             try:
-                self.clients[name] = self.build_client(tier)
+                self.clients[(name, model)] = self.build_client({**tier, "model": model})
             except ValueError:
                 self.missing.add(name)
                 return None
-        return self.clients[name]
+        return self.clients[(name, model)]
+
+    def _models(self, tier: dict, role: str, session: str) -> list[str]:
+        if not is_auto(tier):
+            return [tier["model"]]
+        if self.auto_models is None:
+            return []
+        try:
+            return self.auto_models(tier, role, session)
+        except ValueError:
+            return []
 
     # ---------- the call ----------
 
@@ -294,38 +321,48 @@ class ModelRouter:
             if reason:
                 attempts.append({"tier": tier_name, "skipped": reason})
                 continue
-            client = self._client(tier_name)
-            if client is None:
-                attempts.append({"tier": tier_name, "skipped": "no API key saved"})
-                continue
             tier = self.tiers[tier_name]
+            models = self._models(tier, role, session)
+            if not models:
+                attempts.append(
+                    {
+                        "tier": tier_name,
+                        "skipped": "no model available (none usable, or today's dollar cap is reached)",
+                    }
+                )
+                continue
             tried += 1
-            started = time.monotonic()
-            try:
-                raw = client.structured(system, user, schema, name)
-                if validate is not None:
-                    validate(raw)
-            except RateLimited:
-                self._log(role, tier_name, None, tried, "rate_limited", key, session,
-                          _ms(started), tier)  # fmt: skip
-                attempts.append({"tier": tier_name, "outcome": "rate_limited"})
-                continue
-            except (ValueError, OSError, KeyError, TypeError, AttributeError):
-                self._log(role, tier_name, None, tried, "invalid", key, session,
-                          _ms(started), tier)  # fmt: skip
-                attempts.append({"tier": tier_name, "outcome": "invalid"})
-                continue
-            self._log(role, tier_name, raw, tried, "ok", key, session, _ms(started),
-                      tier, system, user)  # fmt: skip
-            if self.routing["cache"]:
-                stored = {k: v for k, v in raw.items() if k != "routed"}
-                with self._connect() as conn:
-                    conn.execute(
-                        "INSERT OR REPLACE INTO cache VALUES (?,?,?)",
-                        (key, today, json.dumps(stored, default=str)),
-                    )
-            attempts.append({"tier": tier_name, "outcome": "ok"})
-            return {**raw, "routed": {"tier": tier_name, "attempts": attempts}}
+            for model in models:
+                client = self._client(tier_name, model)
+                if client is None:
+                    attempts.append({"tier": tier_name, "skipped": "no API key saved"})
+                    break
+                started = time.monotonic()
+                try:
+                    raw = client.structured(system, user, schema, name)
+                    if validate is not None:
+                        validate(raw)
+                except RateLimited:
+                    self._log(role, tier_name, None, tried, "rate_limited", key, session,
+                              _ms(started), tier, model=model)  # fmt: skip
+                    attempts.append({"tier": tier_name, "model": model, "outcome": "rate_limited"})
+                    continue
+                except (ValueError, OSError, KeyError, TypeError, AttributeError):
+                    self._log(role, tier_name, None, tried, "invalid", key, session,
+                              _ms(started), tier, model=model)  # fmt: skip
+                    attempts.append({"tier": tier_name, "model": model, "outcome": "invalid"})
+                    continue
+                self._log(role, tier_name, raw, tried, "ok", key, session, _ms(started),
+                          tier, system, user, model=model)  # fmt: skip
+                if self.routing["cache"]:
+                    stored = {k: v for k, v in raw.items() if k != "routed"}
+                    with self._connect() as conn:
+                        conn.execute(
+                            "INSERT OR REPLACE INTO cache VALUES (?,?,?)",
+                            (key, today, json.dumps(stored, default=str)),
+                        )
+                attempts.append({"tier": tier_name, "model": model, "outcome": "ok"})
+                return {**raw, "routed": {"tier": tier_name, "model": model, "attempts": attempts}}
         raise ValueError(
             "No model tier could answer: "
             + "; ".join(
@@ -346,6 +383,7 @@ class ModelRouter:
         tier: dict | None,
         system: str | None = None,
         user: str | None = None,
+        model: str | None = None,
     ) -> None:
         usage = (raw or {}).get("usage") or {}
         keep = self.routing["store_prompts"] and outcome == "ok"
@@ -359,15 +397,15 @@ class ModelRouter:
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO calls (at, session, role, tier, provider, model, attempt, outcome, "
-                "input_tokens, output_tokens, latency_ms, prompt_sha, system, user, response) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "input_tokens, output_tokens, latency_ms, prompt_sha, system, user, response, "
+                "cost_usd) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     now.isoformat(),
                     session,
                     role,
                     tier_name,
                     (tier or {}).get("provider"),
-                    (tier or {}).get("model"),
+                    model or (tier or {}).get("model"),
                     attempt,
                     outcome,
                     usage.get("input_tokens"),
@@ -377,6 +415,7 @@ class ModelRouter:
                     system if keep else None,
                     user if keep else None,
                     response,
+                    usage.get("cost_usd"),
                 ),
             )
             if now.minute == 0:  # Light, occasional housekeeping.
@@ -421,6 +460,20 @@ def usage_today(db_path: Path, routing: dict, now: dt.datetime | None = None) ->
                 (tier["name"], start),
             ).fetchone()[0]
             requests = sum(value for key, value in counts.items() if key != "cached")
+            models = dict(
+                conn.execute(
+                    "SELECT model, COUNT(*) FROM calls WHERE tier=? AND at>=? AND outcome='ok' "
+                    "GROUP BY model ORDER BY COUNT(*) DESC LIMIT 6",
+                    (tier["name"], start),
+                ).fetchall()
+            )
+            try:
+                cost = conn.execute(
+                    "SELECT COALESCE(SUM(cost_usd), 0) FROM calls WHERE tier=? AND at>=?",
+                    (tier["name"], start),
+                ).fetchone()[0]
+            except sqlite3.OperationalError:
+                cost = 0.0  # Logged before costs were recorded.
             rows.append(
                 {
                     "tier": tier["name"],
@@ -431,6 +484,8 @@ def usage_today(db_path: Path, routing: dict, now: dt.datetime | None = None) ->
                     "tokens": tokens,
                     "tokens_per_day": tier.get("tokens_per_day", 0),
                     "outcomes": counts,
+                    "models": models,
+                    "cost_usd": round(float(cost or 0), 4),
                 }
             )
         start_ist = (

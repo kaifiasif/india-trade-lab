@@ -99,8 +99,10 @@ steps did is there:
 - **Email delivery**: pick Gmail (or another service), enter your address and a
   16-character Gmail **app password** (needs 2-Step Verification), then press
   *Send a test email*.
-- **Research model**: optional. Pick a provider, paste its key and the exact
-  model ID (for Gemini's free tier, copy it from Google AI Studio).
+- **Research model**: optional. The simplest choice is OpenRouter: paste one
+  key, set a daily dollar cap or choose free models only, and the desk picks
+  the models. Or pick a provider, paste its key and the exact model ID (for
+  Gemini's free tier, copy it from Google AI Studio).
   Turn on **Smart routing** there to send the simple jobs to a free tier and only
   the judge to a stronger one, with the daily limits your key shows.
 - **Choose stocks**: upload NSE's `EQUITY_L.csv` (download it from nseindia.com on

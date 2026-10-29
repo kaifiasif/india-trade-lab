@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Field, Progress } from "@/components/ui/misc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { JobRunner, SecretField, explain } from "@/components/setup-kit";
 import { RoutingEditor } from "@/components/RoutingEditor";
 import { Mascot, type Mood } from "@/mascots/Mascot";
@@ -316,6 +317,7 @@ function EmailStep() {
 
 const PROVIDERS = [
   { id: "disabled", label: "None (rules only)", key: null, hint: "The desk still screens, sizes and journals; specialists and the judge are skipped." },
+  { id: "openrouter", label: "OpenRouter (one key, the desk picks models)", key: "OPENROUTER_API_KEY", hint: "Key from openrouter.ai/keys. Free models do the simple jobs; a capped paid model judges." },
   { id: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", hint: "Has a free tier at aistudio.google.com." },
   { id: "anthropic", label: "Anthropic Claude", key: "ANTHROPIC_API_KEY", hint: "Key from console.anthropic.com." },
   { id: "openai", label: "OpenAI", key: "OPENAI_API_KEY", hint: "Key from platform.openai.com." },
@@ -326,8 +328,13 @@ function ModelStep() {
   const { setup: status, refreshSetup } = useData();
   const [provider, setProvider] = useState(status?.model?.provider ?? "disabled");
   const [model, setModel] = useState(String(status?.settings?.model ?? ""));
+  const savedCaps = (status?.settings?.openrouter ?? {}) as { max_usd_per_day?: number };
+  const [cap, setCap] = useState(String(savedCaps.max_usd_per_day ?? 0.5));
+  const [freeOnly, setFreeOnly] = useState(savedCaps.max_usd_per_day === 0);
   const { busy, run } = useBusy();
   const chosen = PROVIDERS.find((item) => item.id === provider) ?? PROVIDERS[0];
+  const auto = provider === "openrouter";
+  const dollars = Math.max(0, Math.min(100, Number(cap) || 0));
   return (
     <div className="grid max-w-lg gap-5">
       <form
@@ -336,7 +343,9 @@ function ModelStep() {
           event.preventDefault();
           run("model", async () => {
             try {
-              await saveSettings({ model_provider: provider, model: provider === "disabled" ? "" : model.trim() });
+              const changes: Record<string, unknown> = { model_provider: provider, model: provider === "disabled" || auto ? "" : model.trim() };
+              if (auto) changes.openrouter = { ...savedCaps, max_usd_per_day: freeOnly ? 0 : dollars };
+              await saveSettings(changes);
               await refreshSetup();
               toast.success("Research model saved");
             } catch (error) {
@@ -359,7 +368,24 @@ function ModelStep() {
             </SelectContent>
           </Select>
         </Field>
-        {provider !== "disabled" && (
+        {auto && (
+          <div className="grid gap-3 rounded-lg border p-4">
+            <p className="text-sm text-muted-foreground">
+              No model names to pick. Each morning the desk reads OpenRouter's model list and chooses: free models that return strict JSON for the
+              specialists, and the best paid model within your price caps for the judge. Models that answer badly or call it wrong lose their place.
+              Choosing costs no tokens.
+            </p>
+            <label className="flex items-center gap-3 text-sm">
+              <Switch checked={freeOnly} onCheckedChange={setFreeOnly} /> Free models only (never spend money)
+            </label>
+            {!freeOnly && (
+              <Field label="Most to spend per day (USD)" htmlFor="or-cap" hint="Paid models stop for the day at this amount. A typical day costs a few cents.">
+                <Input id="or-cap" inputMode="decimal" className="num w-32" value={cap} onChange={(event) => setCap(event.target.value.replace(/[^\d.]/g, ""))} />
+              </Field>
+            )}
+          </div>
+        )}
+        {provider !== "disabled" && !auto && (
           <Field label="Model name" htmlFor="model" hint="The exact identifier from the provider, e.g. gemini-2.5-flash.">
             <Input id="model" value={model} onChange={(event) => setModel(event.target.value)} className="font-mono" required />
           </Field>
@@ -368,8 +394,58 @@ function ModelStep() {
           {busy && <Loader2 className="animate-spin" />} Save model
         </Button>
       </form>
-      {chosen.key && <SecretField name={chosen.key} label={`${chosen.label} key`} />}
-      <RoutingEditor />
+      {chosen.key && <SecretField name={chosen.key} label={auto ? "OpenRouter key" : `${chosen.label} key`} />}
+      {auto && <OpenRouterCheck />}
+      {!auto && <RoutingEditor />}
+    </div>
+  );
+}
+
+interface KeyStatus {
+  is_free_tier?: boolean | null;
+  free_requests_today: { used?: number | null; limit?: number | null; remaining?: number | null };
+  usage_today_usd?: number | null;
+  models: { free: number; paid_within_caps: number } | null;
+}
+
+/** What OpenRouter reports for the saved key. The key itself never comes back. */
+function OpenRouterCheck() {
+  const { setup: status } = useData();
+  const [result, setResult] = useState<KeyStatus | null>(null);
+  const { busy, run } = useBusy();
+  const free = result?.free_requests_today;
+  return (
+    <div className="grid gap-2">
+      <Button
+        variant="outline"
+        className="w-fit"
+        disabled={busy !== null || !status?.secrets?.OPENROUTER_API_KEY?.set}
+        onClick={() =>
+          run("check", async () => {
+            try {
+              setResult(await setup<KeyStatus>("check_openrouter"));
+            } catch (error) {
+              toast.error("Key check failed", explain(error));
+            }
+          })
+        }
+      >
+        {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Check key
+      </Button>
+      {result && (
+        <dl className="num grid grid-cols-2 gap-x-4 gap-y-1 rounded-md bg-muted/50 px-3 py-2 text-sm">
+          <dt className="text-muted-foreground">Free requests left today</dt>
+          <dd>{free?.remaining != null ? `${free.remaining} of ${free.limit}` : "not reported"}</dd>
+          <dt className="text-muted-foreground">Spent today</dt>
+          <dd>${(result.usage_today_usd ?? 0).toFixed(3)}</dd>
+          <dt className="text-muted-foreground">Models the desk can use</dt>
+          <dd>{result.models ? `${result.models.free} free · ${result.models.paid_within_caps} paid within caps` : "list unavailable"}</dd>
+        </dl>
+      )}
+      <p className="text-xs text-muted-foreground">
+        OpenRouter's free models allow 20 requests a minute, and 50 a day until you have bought 10 credits, then 1,000 a day. A desk day uses
+        about 30–60.
+      </p>
     </div>
   );
 }

@@ -170,7 +170,17 @@ export function LearningPage() {
                         .filter(([key]) => key !== "ok")
                         .map(([key, value]) => ` · ${value} ${key.replace("_", " ")}`)
                         .join("")}
+                      {tier.cost_usd ? ` · $${tier.cost_usd.toFixed(3)} spent` : ""}
                     </p>
+                    {tier.models && Object.keys(tier.models).length > 0 && (
+                      <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label={`Models the desk chose for the ${tier.tier} tier`}>
+                        {Object.entries(tier.models).map(([name, count]) => (
+                          <li key={name} className="min-w-0 max-w-full truncate rounded border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                            {name} <span className="num">×{count}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 );
               })

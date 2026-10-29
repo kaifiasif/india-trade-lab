@@ -287,6 +287,28 @@ class HttpTests(Isolated):
         self.post("save_secret", {"key": "GEMINI_API_KEY", "value": "gemini-key-123456"})
         self.assertTrue(done()["model"])
 
+    def test_openrouter_alone_finishes_the_model_step_and_the_check_never_leaks_the_key(self):
+        import openrouter
+
+        self.post("init_project", {})
+        version = self.get("/api/setup/settings")["version"]
+        changes = {"model_provider": "openrouter", "openrouter": {"max_usd_per_day": 0}}
+        self.post("save_settings", {"version": version, "changes": changes})
+        self.assertEqual(self.status_of(lambda: self.post("check_openrouter", {})), 409)
+        key = "sk-or-v1-abcdef1234567890"
+        self.post("save_secret", {"key": "OPENROUTER_API_KEY", "value": key})
+        reported = {"is_free_tier": True, "free_requests_today": {"remaining": 40, "limit": 50}}
+        with (
+            patch.object(openrouter, "key_status", lambda value: dict(reported)),
+            patch.object(openrouter, "catalogue", lambda folder: []),
+        ):
+            result = self.post("check_openrouter", {})
+        self.assertEqual(result["free_requests_today"]["remaining"], 40)
+        self.assertNotIn(key, json.dumps(result) + json.dumps(self.get("/api/setup/status")))
+        steps = {s["id"]: s["done"] for s in self.get("/api/setup/status")["steps"]}
+        self.assertTrue(steps["model"])
+        self.assertEqual(self.get("/api/setup/learning")["routing"]["enabled"], True)
+
     def test_logins_are_rate_limited(self):
         self.post("init_project", {})
         codes = []
