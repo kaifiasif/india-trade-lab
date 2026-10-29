@@ -67,8 +67,8 @@ class SettingsTests(Isolated):
     def test_valid_save_is_versioned_backed_up_and_paper_only(self):
         path = self.config()
         view = settings_store.editable_view(path)
-        saved = settings_store.save(path, {"max_candidates": 2}, view["version"])
-        self.assertEqual(saved["settings"]["max_candidates"], 2)
+        saved = settings_store.save(path, {"max_candidates": 10}, view["version"])
+        self.assertEqual(saved["settings"]["max_candidates"], 10)
         self.assertNotEqual(saved["version"], view["version"])
         self.assertEqual(json.loads(path.read_text())["mode"], "paper_research")
         self.assertEqual(len(list(self.root.glob("pipeline.json.bak-*"))), 1)
@@ -81,6 +81,8 @@ class SettingsTests(Isolated):
             settings_store.save(path, {"max_candidates": 2}, "stale")
         with self.assertRaises(ValueError):
             settings_store.save(path, {"max_candidates": 99}, version)
+        with self.assertRaises(ValueError):
+            settings_store.save(path, {"max_candidates": 11}, version)
         with self.assertRaises(KeyError):
             settings_store.save(path, {"mode": "live"}, version)
         self.assertEqual(path.read_bytes(), before)

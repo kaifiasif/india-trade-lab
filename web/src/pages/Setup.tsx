@@ -512,7 +512,7 @@ function StocksStep() {
       </div>
 
       <div className={cn("grid gap-3", !uploaded && "pointer-events-none opacity-50")} aria-disabled={!uploaded}>
-        <p className="text-sm font-medium">2. Pick one to three stocks</p>
+        <p className="text-sm font-medium">2. Pick one to ten stocks</p>
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by symbol or company" className="pl-9" aria-label="Search stocks" />
@@ -536,7 +536,7 @@ function StocksStep() {
                 <li key={match.symbol}>
                   <button
                     className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
-                    disabled={!chosen && picked.length >= 3}
+                    disabled={!chosen && picked.length >= 10}
                     onClick={() => setPicked(chosen ? picked.filter((item) => item !== match.symbol) : [...picked, match.symbol])}
                   >
                     <span className="w-24 font-medium">{match.symbol}</span>

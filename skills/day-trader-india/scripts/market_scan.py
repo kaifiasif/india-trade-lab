@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Market scan: the desk finds its own stocks, ranked on signals that lead the open.
 
-The agents no longer wait for you to name one to three stocks. Plain code (no
+The agents no longer wait for you to name one to ten stocks. Plain code (no
 model calls) scans every NSE stock with futures and options, then hands the
 best ten to the specialists and the judge. Three stages, one per moment:
 

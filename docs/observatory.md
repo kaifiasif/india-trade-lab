@@ -32,7 +32,7 @@ reduced motion they hold still and every value is still shown.
 
 Setup walks through: the private project, your name and report address, Kite
 Connect keys, today's Kite login (open Zerodha, paste the address it returns
-to), email, the research model, choosing one to three stocks from NSE's
+to), email, the research model, choosing one to ten stocks from NSE's
 `EQUITY_L.csv`, loading history, the tournament, the paper book and today's
 surveillance and announcement checks. Long tasks run as server jobs with a live
 log; one job per kind runs at a time and a restart marks unfinished jobs as

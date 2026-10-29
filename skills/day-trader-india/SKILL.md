@@ -218,7 +218,7 @@ costs; otherwise the desk sits out. Read [strategy.md](references/strategy.md).
 
 `scripts/market_scan.py` lets the desk pick its own stocks. Code scans every F&O stock
 at 08:40, using futures positioning, delivery, large deals and upcoming events. At
-09:09 it adds the pre-open gap against the Nifty, and the agents judge the best ten.
+09:09 it adds the pre-open gap against the Nifty, and the agents judge the best 20 and pick up to ten.
 At 09:31 it checks each pick's volume and VWAP before entry. Read
 [market-scan.md](references/market-scan.md).
 

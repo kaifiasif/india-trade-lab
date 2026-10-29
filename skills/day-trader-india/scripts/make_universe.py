@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a sourced universe.json for 1-3 NSE cash equities. GET-only, never orders.
+"""Build a sourced universe.json for 1-10 NSE cash equities. GET-only, never orders.
 
 Combines two official sources:
 
@@ -92,8 +92,8 @@ def build_universe(
     tokens: dict[str, str],
     now: dt.datetime,
 ) -> dict:
-    if not 1 <= len(symbols) <= 3 or len(set(symbols)) != len(symbols):
-        raise ValueError("Choose 1-3 distinct symbols; the current feed maps at most three")
+    if not 1 <= len(symbols) <= 10 or len(set(symbols)) != len(symbols):
+        raise ValueError("Choose 1-10 distinct symbols; the current feed maps at most ten")
     instruments = []
     for symbol in symbols:
         if not re.fullmatch(r"[A-Z0-9&\-]+", symbol):
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None, opener=None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--equity-list", type=Path, required=True)
-    parser.add_argument("--symbols", required=True, help="Comma-separated NSE symbols, 1-3")
+    parser.add_argument("--symbols", required=True, help="Comma-separated NSE symbols, 1-10")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:

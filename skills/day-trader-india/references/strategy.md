@@ -76,8 +76,8 @@ deliberate choice to pay for information. Never use it with real money.
 
 1. The tournament, written in code, decides which strategies may trade.
 2. Six specialists assess the filtered pool.
-3. The judge picks up to three finalists by specialist support and score. For
-   each one it spawns two **sub-agents**:
+3. Code picks the finalists by specialist support and score (`selection.finalists`,
+   up to 10). For each one the judge spawns two **sub-agents**:
    - a **risk scout**, which rates what could make a long lose today as low,
      medium or high;
    - a **setup planner**, which picks the proven strategy that fits, or none.
@@ -87,8 +87,8 @@ deliberate choice to pay for information. Never use it with real money.
 6. During the session, the coordinator trades each pick only with the strategy
    the judge named. The paper autopilot records the entry and every managed exit.
 
-Model calls per morning are 6 + 2 per finalist + 1, which is 13 with three
-finalists.
+Model calls per morning are 6 + 2 per finalist + 1, which is 27 with ten
+finalists. The judge then picks up to `max_candidates` (1–10) of them.
 
 ## Settings (`pipeline.json`)
 
@@ -100,5 +100,5 @@ finalists.
   "managed_exits": true,
   "filters": true
 },
-"selection": {"finalists": 3}
+"selection": {"finalists": 10}
 ```

@@ -88,7 +88,7 @@ python3 scripts/data_sync.py --config data/observatory/pipeline.json --current
 
 History uses seven-calendar-day batches, GET-only routes, bounded requests,
 immutable exports and existing completeness checks. The current feed supports
-1–3 mapped instruments. A failed symbol is removed from the new snapshot,
+1–10 mapped instruments. A failed symbol is removed from the new snapshot,
 not carried forward as though refreshed. No automatic login, token refresh,
 retry or provider switching is performed. A refresh failure prevents that
 worker tick from generating entry calls.

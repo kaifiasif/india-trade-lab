@@ -228,7 +228,7 @@ class SetupApi:
         if scanning:
             # The desk picks its own stocks each morning; the list only seeds strategy history.
             stocks_ready = (self.data_dir / "EQUITY_L.csv").is_file() and universe["exists"]
-            stocks_detail = "Upload NSE's stock list and pick 1-3 stocks to seed strategy testing; the daily scan picks the rest"
+            stocks_detail = "Upload NSE's stock list and pick 1-10 stocks to seed strategy testing; the daily scan picks the rest"
         else:
             stocks_ready = universe["exists"] and universe.get("age_days", 99) <= 30
             stocks_detail = "NSE stock list plus today's Kite instrument list"
@@ -595,7 +595,7 @@ class SetupApi:
     def do_build_universe(self, payload: dict, **_: Any):
         symbols = payload.get("symbols")
         if not isinstance(symbols, list):
-            raise ApiError(422, "invalid", "Choose one to three stocks")
+            raise ApiError(422, "invalid", "Choose one to ten stocks")
         path = self.data_dir / "EQUITY_L.csv"
         if not path.is_file():
             raise ApiError(409, "equity_list_required", "Upload NSE's EQUITY_L.csv first")

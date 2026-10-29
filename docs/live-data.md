@@ -40,7 +40,7 @@ python3 scripts/kite_login.py
 source ~/.india-trade-lab.env
 ```
 
-## Choose 1-3 stocks (monthly)
+## Choose 1-10 stocks (monthly)
 
 Download NSE's equity list in a browser from
 `https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv`, then:

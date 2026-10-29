@@ -2,7 +2,7 @@
 
 **An AI research desk for NSE stocks that trades a virtual book, and sits out when nothing has earned the right to trade.**
 
-Every morning, specialist agents read the news, charts, sectors and broker calls for your stocks, and a judge picks up to three to watch. During the session, only strategies that proved themselves on your own history trade them, in a paper book with hard loss limits. Every evening, each agent is graded and learns from its mistakes.
+Every morning, specialist agents read the news, charts, sectors and broker calls for your stocks, and a judge picks up to ten to watch. During the session, only strategies that proved themselves on your own history trade them, in a paper book with hard loss limits. Every evening, each agent is graded and learns from its mistakes.
 
 Paper only: there is no real-order path. Nothing here is a promise of profit.
 
@@ -43,7 +43,7 @@ from your phone.
 |---|---|
 | 08:30 | You log in to Kite |
 | 08:40 | Code scans every F&O stock: futures positioning, delivery, large deals, upcoming events |
-| 09:09 | Pre-open gap against the Nifty; agents and the judge pick from the best ten; picks are emailed |
+| 09:09 | Pre-open gap against the Nifty; agents and the judge pick up to ten from the best 20; picks are emailed |
 | 09:15–15:15 | Picks that pass the 09:31 volume and VWAP check are traded in the paper book; code sizes every trade |
 | 15:15 | Everything is squared off |
 | 16:10 | History is saved, strategies are re-tested at double costs, and agents are graded |

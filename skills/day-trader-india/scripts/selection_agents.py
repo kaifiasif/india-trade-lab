@@ -681,7 +681,7 @@ def run_selection(
             specialists={},
             model_calls=0,
         )
-    finalist_count = max(1, min(finalist_count, len(pool), 5))
+    finalist_count = max(1, min(finalist_count, len(pool), 10))
     if proven is None:
         proven = {
             name: {"description": strategies.DESCRIPTIONS[name]} for name in strategies.STRATEGIES

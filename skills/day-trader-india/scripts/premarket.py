@@ -383,7 +383,7 @@ def write_picks_universe(coordinator: Any, watching: list[str], clock: dt.dateti
     try:
         tokens = make_universe.parse_kite_dump(dump.read_bytes())
         universe = make_universe.build_universe(
-            [symbol.split(":")[-1] for symbol in watching[:3]],
+            [symbol.split(":")[-1] for symbol in watching[:10]],
             make_universe.parse_equity_list(equity),
             tokens,
             clock,
@@ -394,7 +394,7 @@ def write_picks_universe(coordinator: Any, watching: list[str], clock: dt.dateti
     (folder / coordinator.config["universe"]).write_text(
         json.dumps(universe, indent=2) + "\n", encoding="utf-8"
     )
-    return "the session worker now watches " + ", ".join(watching[:3])
+    return "the session worker now watches " + ", ".join(watching[:10])
 
 
 def learned_context(coordinator: Any, symbols: list[str], clock: dt.datetime) -> dict:

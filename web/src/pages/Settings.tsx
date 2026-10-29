@@ -32,7 +32,7 @@ const SECTIONS: { id: string; label: string; note: string; keys: string[] }[] = 
 ];
 
 const LABELS: Record<string, [string, string?]> = {
-  max_candidates: ["Stocks to assess each day", "1 to 3."],
+  max_candidates: ["Most stocks to pick each day", "1 to 10. The judge can still pick fewer, or none."],
   screening_mode: ["Screening", "Liquidity ranks by turnover; relative strength by move versus the index."],
   review_workflow: ["Agent workflow", "Debate adds a bull and bear round per stock."],
   poll_seconds: ["Check prices every (seconds)"],

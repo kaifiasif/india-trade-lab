@@ -67,9 +67,9 @@ OPTIONAL_CONFIG = {
     # Pre-market selection: hard filters first, then six specialist agents and a judge.
     "selection": {
         "agents": True,
-        "pool": 10,
+        "pool": 20,
         "min_specialists": 4,
-        "finalists": 3,
+        "finalists": 10,
         "min_market_cap_tier": "large",
         "max_reference_age_days": 7,
     },
@@ -144,7 +144,7 @@ DEFAULT_CONFIG = {
     "daily_profit_goal_inr": "80000.00",
     "model_provider": "disabled",
     "model": "",
-    "max_candidates": 3,
+    "max_candidates": 10,
     "max_model_calls_per_day": 60,
     "poll_seconds": 60,
     "fee_bps": "5",
@@ -322,17 +322,17 @@ class DailyCoordinator:
         if (
             type(chooser["agents"]) is not bool
             or type(chooser["pool"]) is not int
-            or not 1 <= chooser["pool"] <= 15
+            or not 1 <= chooser["pool"] <= 25
             or type(chooser["min_specialists"]) is not int
             or not 1 <= chooser["min_specialists"] <= 6
             or type(chooser["finalists"]) is not int
-            or not 1 <= chooser["finalists"] <= 5
+            or not 1 <= chooser["finalists"] <= 10
             or chooser["min_market_cap_tier"] not in ("large", "mid", "small")
             or type(chooser["max_reference_age_days"]) is not int
             or not 1 <= chooser["max_reference_age_days"] <= 31
         ):
             raise ValueError(
-                "Selection needs a pool of 1-15, a quorum of 1-6 specialists, a market-cap "
+                "Selection needs a pool of 1-25, a quorum of 1-6 specialists, a market-cap "
                 "tier of large/mid/small and a reference age of 1-31 days"
             )
         plan = cfg["strategy"]
@@ -401,8 +401,8 @@ class DailyCoordinator:
         for key in DEFAULT_CONFIG:
             if key not in cfg:
                 raise ValueError(f"Missing pipeline setting: {key}")
-        if type(cfg["max_candidates"]) is not int or not 1 <= cfg["max_candidates"] <= 3:
-            raise ValueError("Model review budget permits 1–3 candidates per run")
+        if type(cfg["max_candidates"]) is not int or not 1 <= cfg["max_candidates"] <= 10:
+            raise ValueError("Pick 1–10 candidates per run")
         if (
             type(cfg["max_model_calls_per_day"]) is not int
             or not 0 <= cfg["max_model_calls_per_day"] <= 120

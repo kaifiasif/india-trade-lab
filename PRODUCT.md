@@ -16,7 +16,7 @@ Kaifi, the owner: an Indian retail trader and frontend engineer who runs the des
 
 ## Product Purpose
 
-A paper-trading research desk for NSE cash equity. Before the open, specialist agents and a judge pick up to three stocks; during the session proven strategies trade a virtual book under hard loss limits; every evening a tournament re-tests the strategies at double costs. Success: the owner can set up, run and understand the desk entirely from the UI, and trusts what it shows.
+A paper-trading research desk for NSE cash equity. Before the open, specialist agents and a judge pick up to ten stocks; during the session proven strategies trade a virtual book under hard loss limits; every evening a tournament re-tests the strategies at double costs. Success: the owner can set up, run and understand the desk entirely from the UI, and trusts what it shows.
 
 ## Positioning
 

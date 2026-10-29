@@ -4,9 +4,9 @@ Runtime: `scripts/market_scan.py`. It is on by default for projects created with
 `decision_pipeline.py init` or the dashboard, and set with `"scan"` in
 `pipeline.json`.
 
-Without the scan, the agents only judge the 1–3 stocks you list. With it, plain
+Without the scan, the agents only judge the 1–10 stocks you list. With it, plain
 code scans every NSE stock that has futures and options (about 180–220). It
-hands the best ten to the specialists and the judge, ranked on signals that
+hands the best 20 to the specialists and the judge, who picks up to ten, ranked on signals that
 show how traders are positioned going into the open, not only on news the
 market has already priced.
 
@@ -15,7 +15,7 @@ market has already priced.
 | Time (IST) | Stage | What it uses |
 | --- | --- | --- |
 | 08:40 | `overnight` | Daily candles: trend, RSI, liquidity. Futures open-interest change against price change. Put/call open-interest ratio and the strikes with the most open interest. Yesterday's delivery % and bulk/block deals. Results, board meetings and ex-dates in the next five days. Keeps the best 25 |
-| 09:09 | `open` | The pre-open auction's opening price for those 25: the gap, and the gap against the Nifty 50 and the sector index. Then `premarket.py` runs the agents and the judge on the best ten and emails the picks |
+| 09:09 | `open` | The pre-open auction's opening price for those 25: the gap, and the gap against the Nifty 50 and the sector index. Then `premarket.py` runs the agents and the judge on the best 20, which picks up to ten, and emails the picks |
 | 09:31 | `confirm` | For each pick: volume so far against the same 15 minutes on the last 20 sessions, price against VWAP, and strength against the Nifty since the open |
 
 How to read futures open interest (OI) against price, using the previous
