@@ -110,7 +110,19 @@ OPTIONAL_CONFIG = {
         "event_window_days": 5,
         "min_rvol": 1.5,
         "require_confirmation": True,
+        "insiders": True,
+        "results_for": 12,
     },
+    # The trade desk agent runs the Entry Timer, Exit Planner, Time Machine, trade check
+    # and Price Alerts on every session tick, for each of today's picks.
+    "trade_desk": {"enabled": True},
+    # Time Machine gate (downgrade only): skip autopilot entries whose replays lean
+    # toward the stop. Without 20 stored sessions the gate lets the entry through,
+    # unless require_history is true.
+    "timemachine": {"enabled": True, "replays": 5000, "require_history": False},
+    # Price alerts: a stop, target and square-off alert for every paper entry, and
+    # email when one rings.
+    "alerts": {"email": False, "on_entries": True},
     # OpenRouter with model_provider "openrouter": the desk picks models itself, free ones
     # for simple jobs and a paid one under these caps for the judge (0 = free only).
     "openrouter": {
@@ -134,7 +146,7 @@ OPTIONAL_CONFIG = {
 }
 NESTED_DEFAULTS = (
     "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
-    "openrouter",
+    "openrouter", "trade_desk", "timemachine", "alerts",
 )  # fmt: skip
 
 DEFAULT_CONFIG = {
@@ -369,6 +381,22 @@ class DailyCoordinator:
             raise ValueError(
                 "scan needs true/false switches, a shortlist of 10-50, an event window of "
                 "1-10 days and gap/volume limits between 0 and 10"
+            )
+        if type(scan["insiders"]) is not bool or (
+            type(scan["results_for"]) is not int or not 0 <= scan["results_for"] <= 25
+        ):
+            raise ValueError("scan insiders must be true/false and results_for 0-25")
+        machine = cfg["timemachine"]
+        if (
+            any(type(machine[key]) is not bool for key in ("enabled", "require_history"))
+            or type(machine["replays"]) is not int
+            or not 500 <= machine["replays"] <= 50_000
+            or any(type(value) is not bool for value in cfg["alerts"].values())
+            or type(cfg["trade_desk"]["enabled"]) is not bool
+        ):
+            raise ValueError(
+                "timemachine needs true/false switches and 500-50,000 replays; alerts and "
+                "trade_desk take true/false"
             )
         router_caps = cfg["openrouter"]
         if (

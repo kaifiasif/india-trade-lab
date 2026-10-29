@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Td, Th } from "@/components/ui/misc";
 import { JobRunner } from "@/components/setup-kit";
+import { TradeDeskCard } from "@/components/TradeDeskCard";
 import { Mascot } from "@/mascots/Mascot";
 import type { MascotKey } from "@/mascots/data";
 
@@ -149,6 +150,8 @@ export function DeskPage() {
 
       {desk?.scan && <ScanCard desk={desk} />}
 
+      <TradeDeskCard desk={state?.desk?.trade_desk} />
+
       <Card>
         <CardHeader>
           <CardTitle>Run it now</CardTitle>
@@ -178,6 +181,18 @@ const BUILDUP_TONE: Record<string, "success" | "warning" | "destructive" | "outl
 function signed(value: number | null | undefined, suffix = "%") {
   if (value === null || value === undefined) return "—";
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}${suffix}`;
+}
+
+type Ranked = NonNullable<NonNullable<DeskState["report"]>["ranked"]>[number];
+
+function filings(row: Ranked) {
+  const parts: string[] = (row.setups ?? []).map((tag) => tag.replace(/_/g, " "));
+  const insiders = row.insiders;
+  if (insiders?.pledges) parts.push(`${insiders.pledges} pledge(s)`);
+  else if (insiders && insiders.net_market_inr) parts.push(`insiders net ${insiders.net_market_inr > 0 ? "bought" : "sold"} ₹${(Math.abs(insiders.net_market_inr) / 1e7).toFixed(1)} cr`);
+  const results = row.results;
+  if (results && !results.unavailable && results.revenue_yoy_pct != null) parts.push(`revenue ${results.revenue_yoy_pct > 0 ? "+" : ""}${results.revenue_yoy_pct}% YoY`);
+  return parts.join(" · ");
 }
 
 function ScanCard({ desk }: { desk: NonNullable<DeskState["report"]> }) {
@@ -229,6 +244,7 @@ function ScanCard({ desk }: { desk: NonNullable<DeskState["report"]> }) {
                 <Th>Pre-open gap</Th>
                 <Th>Vs Nifty</Th>
                 <Th>Next 5 days</Th>
+                <Th>Chart · filings</Th>
                 <Th>Score</Th>
                 <Th>09:31 check</Th>
               </tr>
@@ -247,6 +263,7 @@ function ScanCard({ desk }: { desk: NonNullable<DeskState["report"]> }) {
                     <Td className="num">{signed(row.gap_pct)}</Td>
                     <Td className={cn("num", (row.rs_pct ?? 0) > 0 ? "text-success" : (row.rs_pct ?? 0) < 0 ? "text-destructive" : "")}>{signed(row.rs_pct, " pp")}</Td>
                     <Td className="text-xs text-muted-foreground">{row.events.length ? row.events.map((event) => `${event.purpose} ${event.date}`).join("; ") : "none"}</Td>
+                    <Td className="text-xs text-muted-foreground">{filings(row) || "—"}</Td>
                     <Td className="num">{row.score ?? "—"}</Td>
                     <Td>
                       {!row.watch ? (

@@ -32,7 +32,7 @@ operations and supply their actual outputs; never invent a successful run.
 2. Compare only the observed price/time with the declared condition. Separate a completed-bar close, an intrabar high/low and a current quote; do not claim an exact crossing time or executable fill from sparse data.
 3. Obtain the official date-specific Indian exchange session before checking an opening bell, cutoff or close. Do not reuse NYSE hours or assume a standard session on holidays or special sessions.
 4. Return observed/met/not-observed with evidence and staleness limits. Use DATA_BLOCK when the observation is missing or too old; do not interpret no observation as a condition not occurring.
-5. Explain the completed one-time check and hand material stop/target evidence to `india-risk`. Do not claim continuous monitoring, a registered schedule, future notification or automatic paper exit: no watcher, live-price adapter or alert runner is implemented in the core.
+5. Explain the completed one-time check and hand material stop/target evidence to `india-risk`. Standing rules belong in the core `price_alerts.py`, which the session worker checks each tick and logs once; report only what its log shows rang. Never claim an exact crossing time, a fill or an order from an alert.
 
 ## Emit the handoff
 

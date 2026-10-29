@@ -57,6 +57,8 @@ out and records no trades. That is the safe outcome, not a fault.
 - **Pre-market report:** trend, RSI, sector moves, liquidity, headline sentiment and broker calls for each stock.
 - **Agents:** six specialists, a risk scout, a setup planner and a judge. Agents can only narrow or veto; code decides size.
 - **Strategies:** an opening-range breakout and a VWAP pullback, with breakeven, trailing and time stops.
+- **Trade desk on a loop:** every few minutes the desk agent runs an entry timer, an exit planner, a time machine (10,000 replays of the rest of the day from the stock's own history), a budget and risk check, and price alerts for each pick. The time machine can veto a paper entry. See [trade-tools.md](skills/day-trader-india/references/trade-tools.md).
+- **Filings:** the latest quarterly results from NSE's XBRL, and SEBI insider-trading disclosures (promoter and director buying, selling and pledges), read into the morning scan.
 - **Learning:** mistakes become lessons the agents read next morning, and stocks that keep losing sit out for a week.
 - **Smart model routing:** simple jobs go to free models and the judge to a capped paid one. With OpenRouter, the desk chooses the models on its own record.
 - **Dashboard:** setup, today's picks, replays, research and each agent's track record, in light and dark.
@@ -71,7 +73,7 @@ out and records no trades. That is the safe outcome, not a fault.
 
 - [Dashboard and setup](docs/observatory.md)
 - [Deploy on Oracle Cloud](docs/deploy-oracle.md) · [Run on your own computer](docs/live-data.md)
-- [Pre-market report](skills/day-trader-india/references/premarket.md) · [Strategies and tournament](skills/day-trader-india/references/strategy.md) · [Learning and routing](skills/day-trader-india/references/learning.md)
+- [Pre-market report](skills/day-trader-india/references/premarket.md) · [Trade tools and the desk agent](skills/day-trader-india/references/trade-tools.md) · [Strategies and tournament](skills/day-trader-india/references/strategy.md) · [Learning and routing](skills/day-trader-india/references/learning.md)
 - [Paper engine](skills/day-trader-india/references/engine.md) · [Guardrails](skills/day-trader-india/references/guardrails.md) · [Command-line tools](skills/day-trader-india/references/data-and-tools.md)
 - [Install as skills for Claude, Codex and other agents](docs/installation.md)
 

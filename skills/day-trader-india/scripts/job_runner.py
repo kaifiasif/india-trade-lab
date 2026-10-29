@@ -34,7 +34,7 @@ KINDS: dict[str, dict[str, Any]] = {
     "tournament": {"label": "Strategy tournament", "argv": ["tournament.py"], "timeout": 900},
     "history": {
         "label": "Load 180 days of history",
-        "argv": ["data_sync.py", "--days", "180", "--max-symbols", "3"],
+        "argv": ["data_sync.py", "--days", "180", "--max-symbols", "10"],
         "timeout": 3600,
     },
     "scan_overnight": {
@@ -62,12 +62,28 @@ KINDS: dict[str, dict[str, Any]] = {
         "argv": ["learning.py", "finetune-export", "--role", "all"],
         "timeout": 600,
     },
+    "desk_tick": {
+        "label": "Run the trade desk now (entry, plan, odds, check, alerts)",
+        "argv": ["trade_desk.py", "--once"],
+        "timeout": 300,
+    },
+    "insiders": {
+        "label": "Insider-trading filings, last 7 days",
+        "argv": ["insider_tracker.py", "recent", "--days", "7", "--insiders-only"],
+        "timeout": 120,
+    },
+    "alerts_check": {
+        "label": "Check price alerts",
+        "argv": ["price_alerts.py", "check"],
+        "timeout": 120,
+    },
     "reference": {
         "label": "Refresh NSE reference data",
         "argv": ["reference.py", "refresh"],
         "timeout": 600,
     },
 }
+SUBCOMMAND_SCRIPTS = ("learning.py", "market_scan.py", "insider_tracker.py", "price_alerts.py")
 STATES = ("running", "succeeded", "failed", "timed_out", "interrupted")
 
 
@@ -107,7 +123,7 @@ class JobRunner:
         if script == "reference.py":
             return [self.python, str(HERE / script), "--db",
                     str(self.config.parent / "reference.sqlite"), *rest]  # fmt: skip
-        if script in ("learning.py", "market_scan.py"):  # Subcommands follow --config.
+        if script in SUBCOMMAND_SCRIPTS:  # Subcommands follow --config.
             return [self.python, str(HERE / script), "--config", str(self.config), *rest]
         return [self.python, str(HERE / script), *rest, "--config", str(self.config)]
 

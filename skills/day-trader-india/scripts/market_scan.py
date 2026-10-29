@@ -72,6 +72,8 @@ DEFAULTS: dict[str, Any] = {
     "event_window_days": 5,
     "min_rvol": 1.5,
     "require_confirmation": True,
+    "insiders": True,  # SEBI insider-trading filings of the last 30 days, from NSE.
+    "results_for": 12,  # Read the latest filed results for this many of the shortlist.
 }
 BUILDUP_POINTS = {
     "long build-up": 2.0,
@@ -521,6 +523,55 @@ def technicals(bars: list[dict]) -> dict[str, Any]:
     }
 
 
+def _rsi(closes: list[float], length: int = 14) -> list[float | None]:
+    """Wilder's RSI for every close (None until there is enough history)."""
+    values: list[float | None] = [None] * len(closes)
+    if len(closes) <= length:
+        return values
+    gains = [max(closes[i] - closes[i - 1], 0) for i in range(1, length + 1)]
+    losses = [max(closes[i - 1] - closes[i], 0) for i in range(1, length + 1)]
+    gain, loss = sum(gains) / length, sum(losses) / length
+    for index in range(length, len(closes)):
+        if index > length:
+            change = closes[index] - closes[index - 1]
+            gain = (gain * (length - 1) + max(change, 0)) / length
+            loss = (loss * (length - 1) + max(-change, 0)) / length
+        values[index] = 100.0 if loss == 0 else 100 - 100 / (1 + gain / loss)
+    return values
+
+
+def setups(bars: list[dict]) -> list[str]:
+    """Chart setups on daily closes, the classic scanner rules. Tags, not predictions.
+
+    - ``breakout_20d``: the last close is above every close of the 20 sessions before it
+    - ``bull_flag``: up more than 10% over the 10 sessions before the last 5, then the
+      last 5 closes inside a 5% range
+    - ``reclaim_ma20``: the close before was under its 20-day average, the last above it
+    - ``oversold``: RSI(14) under 30; ``oversold_bounce``: under 30 yesterday, up today
+    """
+    closes = [bar["close"] for bar in bars]
+    tags: list[str] = []
+    if len(closes) < 22:
+        return tags
+    if closes[-1] > max(closes[-21:-1]):
+        tags.append("breakout_20d")
+    if len(closes) >= 16:
+        run_up = closes[-6] / closes[-16] - 1
+        recent = closes[-5:]
+        if run_up > 0.10 and max(recent) / min(recent) - 1 <= 0.05:
+            tags.append("bull_flag")
+    average_now = sum(closes[-20:]) / 20
+    average_before = sum(closes[-21:-1]) / 20
+    if closes[-2] < average_before and closes[-1] > average_now:
+        tags.append("reclaim_ma20")
+    rsi = _rsi(closes)
+    if rsi[-1] is not None and rsi[-1] < 30:
+        tags.append("oversold")
+    if rsi[-2] is not None and rsi[-2] < 30 and closes[-1] > closes[-2]:
+        tags.append("oversold_bounce")
+    return tags
+
+
 def overnight_filters(row: dict, settings: dict, today: dt.date) -> list[str]:
     reasons = []
     tech = row["technical"]
@@ -577,6 +628,14 @@ def overnight_score(row: dict) -> dict[str, Any]:
     if net:
         award("block/bulk deals", 0.5 if net > 0 else -0.5,
               f"net {'bought' if net > 0 else 'sold'} {abs(net):,.0f} shares in large deals")  # fmt: skip
+    chart = [
+        tag for tag in row.get("setups", []) if tag in ("breakout_20d", "bull_flag", "reclaim_ma20")
+    ]
+    if chart:
+        award("chart setup", min(1.0, 0.5 * len(chart)), ", ".join(chart))
+    insider = row.get("insider_score")
+    if insider:
+        award("insider filings", insider[0], insider[1])
     if row["events"]:
         award(
             "upcoming event",
@@ -651,6 +710,16 @@ def overnight(
     except (ValueError, json.JSONDecodeError) as exc:
         events, events_known = {}, False
         notes.append(f"NSE event calendar unavailable ({exc}); events are not screened")
+    insiders: dict[str, dict] = {}
+    if settings["insiders"]:
+        import insider_tracker
+
+        try:
+            insiders = insider_tracker.summary(
+                insider_tracker.fetch(today - dt.timedelta(days=30), today, None, fetch)
+            )
+        except (ValueError, json.JSONDecodeError) as exc:
+            notes.append(f"insider-trading filings unavailable ({str(exc)[:80]})")
     reference = ReferenceStore(coordinator.path("reference_db"))
     snapshot: dict[str, dict] = {}
     results = []
@@ -678,6 +747,7 @@ def overnight(
         position["buildup"] = buildup(price_change, oi_change)
         snapshot[item["symbol"]] = position
         facts = reference.lookup(item["symbol"], clock)
+        daily_bars = store.bars(item["symbol"], today)
         row = {
             "symbol": item["symbol"],
             "name": item["name"],
@@ -685,11 +755,17 @@ def overnight(
             "sector_index": facts.get("sector_index"),
             "market_cap_tier": facts.get("market_cap_tier"),
             "lot_size": item["lot_size"],
-            "technical": technicals(store.bars(item["symbol"], today)),
+            "technical": technicals(daily_bars),
+            "setups": setups(daily_bars),
+            "insiders": insiders.get(item["symbol"]),
             "positioning": position,
             "events": events.get(name, []),
         }
         row["filters"] = overnight_filters(row, settings, today)
+        if settings["insiders"]:
+            import insider_tracker
+
+            row["insider_score"] = insider_tracker.score(row["insiders"])
         row["score"] = overnight_score(row)
         results.append(row)
     store.save_positioning(str(today), snapshot)
@@ -698,6 +774,15 @@ def overnight(
         key=lambda row: row["score"]["total"],
         reverse=True,
     )
+    shortlist = passed[: int(settings["shortlist"])]
+    if int(settings["results_for"]) > 0:
+        import results_analyst
+
+        for row in shortlist[: int(settings["results_for"])]:
+            try:
+                row["results"] = results_analyst.brief(results_analyst.latest(row["symbol"], fetch))
+            except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+                row["results"] = {"unavailable": str(exc)[:100]}
     reasons: dict[str, int] = {}
     for row in results:
         for reason in row["filters"]:
@@ -710,7 +795,7 @@ def overnight(
         "passed": len(passed),
         "events_screened": events_known,
         "dropped_by": dict(sorted(reasons.items(), key=lambda item: -item[1])[:8]),
-        "shortlist": passed[: int(settings["shortlist"])],
+        "shortlist": shortlist,
         "notes": notes,
         "notice": "Positioning is the previous session's close. These signals describe how "
         "traders are positioned; they do not predict prices.",

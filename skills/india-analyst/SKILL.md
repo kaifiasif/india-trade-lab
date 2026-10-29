@@ -28,7 +28,7 @@ operations and supply their actual outputs; never invent a successful run.
 
 ## Perform the role
 
-1. Obtain the exact NSE/BSE filing or issuer IR report, reporting period and publication timestamp available by the requested as-of time. Use Indian filings; do not transplant SEC/XBRL workflows or invent a filing API.
+1. Obtain the exact NSE/BSE filing or issuer IR report, reporting period and publication timestamp available by the requested as-of time. Use Indian filings: the core `results_analyst.py` reads NSE's filed XBRL; do not transplant SEC workflows or invent a filing API.
 2. Distinguish consolidated from standalone accounts, audited from unaudited results, quarter from year-to-date data and original from restated figures. Preserve INR units and comparable period definitions.
 3. Compare revenue, operating performance, net profit, cash conversion, debt and dilution with appropriate prior periods. Reconcile exceptional items and accounting changes before describing growth or margins.
 4. Use sector-appropriate measures, especially for banks, NBFCs and insurers. Separate management statements from independently verified facts; label all assumptions in valuation scenarios.

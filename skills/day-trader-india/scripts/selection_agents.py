@@ -329,6 +329,24 @@ def evidence_catalogue(candidate: dict) -> dict[str, dict[str, Any]]:
                 "upcoming_events_next_5_days": signals["events"] or "none found",
             },
         }
+        if signals.get("setups"):
+            catalogue[f"{symbol}#setups"] = {
+                "roles": ["technical-analyst"],
+                "facts": {"daily_chart_setups": signals["setups"], "as_of": "previous close"},
+            }
+        if signals.get("results") and "unavailable" not in signals["results"]:
+            catalogue[f"{symbol}#results"] = {
+                "roles": ["news-analyst", "brokerage-analyst"],
+                "facts": {"latest_filed_quarter_inr_crore": signals["results"]},
+            }
+        if signals.get("insiders"):
+            catalogue[f"{symbol}#insiders"] = {
+                "roles": ["news-analyst", "liquidity-analyst"],
+                "facts": {
+                    "sebi_insider_filings_last_30_days": signals["insiders"],
+                    "note": "public disclosures of trades already made, filed within days",
+                },
+            }
     return catalogue
 
 

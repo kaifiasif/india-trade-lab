@@ -77,9 +77,13 @@ export interface DeskState {
       gap_pct: number | null;
       rs_pct: number | null;
       events: { date: string; purpose: string }[];
+      setups?: string[];
+      insiders?: { net_market_inr: number; buys: number; sells: number; pledges: number } | null;
+      results?: { quarter_end?: string; revenue_yoy_pct?: number | null; net_profit_yoy_pct?: number | null; unavailable?: string } | null;
     }[];
     confirmation?: Record<string, { confirmed: boolean; rvol: number | null; above_vwap: boolean; rs_since_open_pct: number | null; reasons: string[] }> | null;
   } | null;
+  trade_desk?: TradeDesk | null;
   scorecard: {
     as_of: string;
     sessions?: number;
@@ -195,4 +199,46 @@ export interface LearningSummary {
   stock_notes: StockNote[];
   finetune: { role: string; examples: number; graded: number; accuracy: number | null; advice: string }[];
   routing: { enabled: boolean; usage: TierUsage[] };
+}
+
+export interface FanPoint {
+  bar: number;
+  p5: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+}
+
+export interface DeskCard {
+  symbol: string;
+  entry: { status?: string; message?: string; time?: string; price?: number };
+  plan: { entry: number; stop: number; target: number; risk_per_share: number; reward_risk: number } | null;
+  plan_refused?: string | null;
+  odds: {
+    target_first_pct: number;
+    stop_first_pct: number;
+    neither_pct: number;
+    green_pct: number;
+    average_r: number;
+    after_costs: number | null;
+    replays: number;
+    sessions: number;
+    seed: number;
+    fan?: FanPoint[];
+    code: string;
+    verdict: string;
+    history?: { fired: number; target: number; stop: number; neither: number; sessions: number } | null;
+  } | null;
+  odds_unavailable?: string | null;
+  check: { verdict: string; qty: number; cost_inr: number; planned_loss_inr: number; decided_by: string; blocks: string[] } | null;
+  check_unavailable?: string | null;
+}
+
+export interface TradeDesk {
+  date: string;
+  checked_at: string;
+  status: string;
+  cards: DeskCard[];
+  alerts: { at: string; type: string; message: string }[];
 }

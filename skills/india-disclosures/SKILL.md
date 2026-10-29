@@ -32,7 +32,7 @@ operations and supply their actual outputs; never invent a successful run.
 2. Use only disclosures published by the research as-of time. Preserve reporting and publication lag, revisions, missing periods and differences in portfolio or shareholding categories.
 3. Reconcile corporate actions, share-count changes, mergers and category changes before comparing ownership percentages or quantities. Distinguish a position snapshot from an actual transaction record.
 4. State only what the filings support. Do not infer current holdings, current trades, exact trade dates, prices, motives or a beneficial owner beyond the disclosed scope.
-5. Hand historical ownership observations to `india-analyst` and `india-reviewer`. Do not create an Indian Pelosi/congressional-trade counterpart, copying strategy or live institutional tracker; the core supplies no disclosure-ingestion engine.
+5. Hand historical ownership observations to `india-analyst` and `india-reviewer`. SEBI insider-trading filings come from the core `insider_tracker.py`: treat them as lagged public disclosures of completed trades. Never build a copying strategy or claim inside information.
 
 ## Emit the handoff
 

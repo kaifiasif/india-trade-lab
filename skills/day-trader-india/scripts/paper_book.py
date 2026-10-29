@@ -116,6 +116,34 @@ def create(
     return seal_state(state)
 
 
+def allow_symbols(book: dict[str, Any], symbols: list[str], source: str, at: str) -> dict[str, Any]:
+    """A new state whose stock list also holds ``symbols``, with the change logged.
+
+    The market scan picks new stocks each morning; the book must accept them or every
+    pick would be refused. Only additions: nothing held or recorded changes, and every
+    other limit still applies at each fill.
+    """
+    verify_state(book)
+    if book.get("mode") != "paper_manual":
+        raise ValueError("Only the forward paper book's stock list is extended")
+    wanted = sorted(set(symbols))
+    if (
+        not wanted
+        or len(wanted) > 10
+        or any(not re.fullmatch(r"NSE:[A-Z0-9&.\-]+", symbol) for symbol in wanted)
+    ):
+        raise ValueError("Add 1-10 exchange-qualified NSE symbols, e.g. NSE:TCS")
+    added = [symbol for symbol in wanted if symbol not in book["symbols"]]
+    if not added:
+        return book
+    state = copy.deepcopy(book)
+    state["symbols"] = sorted(set(state["symbols"]) | set(added))
+    state.setdefault("allowlist_changes", []).append(
+        {"at": timestamp(at).isoformat(), "added": added, "source": source[:120]}
+    )
+    return seal_state(state)
+
+
 def fill(
     book: dict[str, Any],
     side: str,

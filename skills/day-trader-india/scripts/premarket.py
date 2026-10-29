@@ -343,6 +343,9 @@ def scan_inputs(coordinator: Any, clock: dt.datetime) -> dict | None:
                 "positioning": row["positioning"],
                 "opening": row.get("opening"),
                 "events": row["events"],
+                "setups": row.get("setups", []),
+                "insiders": row.get("insiders"),
+                "results": row.get("results"),
                 "scan_parts": [
                     part
                     for part in row["score"]["parts"]
@@ -394,7 +397,37 @@ def write_picks_universe(coordinator: Any, watching: list[str], clock: dt.dateti
     (folder / coordinator.config["universe"]).write_text(
         json.dumps(universe, indent=2) + "\n", encoding="utf-8"
     )
-    return "the session worker now watches " + ", ".join(watching[:10])
+    note = allow_in_book(coordinator, watching[:10], clock)
+    return "the session worker now watches " + ", ".join(watching[:10]) + note
+
+
+def allow_in_book(coordinator: Any, symbols: list[str], clock: dt.datetime) -> str:
+    """Add today's picks to the paper book's stock list so they can be paper-traded."""
+    import guardrails
+
+    import paper_book
+
+    path = coordinator.path("book")
+    if not path.is_file():
+        return ""
+    try:
+        with sqlite3.connect(path, isolation_level=None, timeout=10) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT data FROM book WHERE id=1").fetchone()
+            if row is None:
+                conn.rollback()
+                return ""
+            state = json.loads(row[0])
+            updated = paper_book.allow_symbols(
+                state, symbols, "market scan picks", clock.isoformat()
+            )
+            if updated is not state:
+                guardrails.seal_state(updated)
+                conn.execute("INSERT OR REPLACE INTO book VALUES (1, ?)", (json.dumps(updated),))
+            conn.commit()
+    except (ValueError, KeyError, sqlite3.Error) as exc:
+        return f"; the paper book's stock list was not updated ({str(exc)[:80]})"
+    return "; the paper book accepts them"
 
 
 def learned_context(coordinator: Any, symbols: list[str], clock: dt.datetime) -> dict:
@@ -771,6 +804,20 @@ def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
 
     The password comes from the environment or the owner-only secret store, never JSON.
     """
+    message = EmailMessage()
+    message["Subject"] = f"Pre-market watchlist {report['session_date']}: " + (
+        ", ".join(report["watching"]) or "nothing today"
+    )
+    message.set_content(
+        f"{report['notice']}\n\nWatching: {', '.join(report['watching']) or 'nothing'}\n"
+        "Open the attached HTML for the full report."
+    )
+    message.add_alternative(page, subtype="html")
+    return smtp_send(message, config)
+
+
+def smtp_send(message: EmailMessage, config: dict) -> dict[str, Any]:
+    """Send one prepared message to ``email_to`` from the configured sender, or say why not."""
     import secret_store
 
     recipients = config.get("email_to")
@@ -783,17 +830,8 @@ def send_email(report: dict, page: str, config: dict) -> dict[str, Any]:
         return {"sent": False, "reason": "no SMTP password saved (Setup → Email)"}
     if not public_mail_host(config["smtp_host"]):
         return {"sent": False, "reason": "the mail server must be a public host name"}
-    message = EmailMessage()
-    message["Subject"] = f"Pre-market watchlist {report['session_date']}: " + (
-        ", ".join(report["watching"]) or "nothing today"
-    )
     message["From"] = config.get("email_from") or config["smtp_user"]
     message["To"] = ", ".join(recipients) if isinstance(recipients, list) else recipients
-    message.set_content(
-        f"{report['notice']}\n\nWatching: {', '.join(report['watching']) or 'nothing'}\n"
-        "Open the attached HTML for the full report."
-    )
-    message.add_alternative(page, subtype="html")
     try:
         with smtplib.SMTP(
             config["smtp_host"], int(config.get("smtp_port", 587)), timeout=30
