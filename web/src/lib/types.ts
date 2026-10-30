@@ -58,7 +58,33 @@ export interface DeskState {
     strategies: string[];
     assessed: number;
     pool: number;
+    scan?: {
+      stage: string;
+      scanned: number;
+      passed: number;
+      dropped_by: Record<string, number>;
+      dropped_at_open: string[];
+      events_screened: boolean;
+      notes: string[];
+    } | null;
+    ranked?: {
+      symbol: string;
+      score: number | null;
+      eligible: boolean;
+      watch: boolean;
+      buildup: string | null;
+      delivery_pct: number | null;
+      gap_pct: number | null;
+      rs_pct: number | null;
+      events: { date: string; purpose: string }[];
+      setups?: string[];
+      insiders?: { net_market_inr: number; buys: number; sells: number; pledges: number } | null;
+      results?: { quarter_end?: string; revenue_yoy_pct?: number | null; net_profit_yoy_pct?: number | null; unavailable?: string } | null;
+    }[];
+    confirmation?: Record<string, { confirmed: boolean; rvol: number | null; above_vwap: boolean; rs_since_open_pct: number | null; reasons: string[] }> | null;
   } | null;
+  trade_desk?: TradeDesk | null;
+  swing?: SwingDesk | null;
   scorecard: {
     as_of: string;
     sessions?: number;
@@ -124,7 +150,133 @@ export interface SetupStatus {
   tournament: { ran: boolean; as_of?: string; eligible: string[] };
   attested_today: Record<string, { attested_at: string }>;
   book: boolean;
+  swing_book?: boolean;
   jobs: Job[];
   job_kinds: Record<string, string>;
   steps: { id: string; label: string; done: boolean; detail: string }[];
+}
+
+export interface TrackRecord {
+  graded: number;
+  right: number;
+  wrong: number;
+  missed: number;
+  accuracy: number;
+}
+
+export interface StockNote {
+  symbol: string;
+  sessions_studied?: number;
+  avg_range_pct?: number;
+  avg_abs_gap_pct?: number;
+  up_close_share?: number;
+  judge_picks_graded?: number;
+  judge_picks_right?: number;
+  paper_trades?: number;
+  paper_wins?: number;
+  avg_r?: number | null;
+  cooldown_until?: string;
+  cooldown_reason?: string;
+}
+
+export interface TierUsage {
+  tier: string;
+  provider: string;
+  model: string;
+  requests: number;
+  requests_per_day: number;
+  tokens: number;
+  tokens_per_day: number;
+  outcomes: Record<string, number>;
+  /** OpenRouter auto tiers: answered calls per model the desk chose today. */
+  models?: Record<string, number>;
+  cost_usd?: number;
+}
+
+export interface LearningSummary {
+  sessions_graded: number;
+  totals: Record<string, number>;
+  track_records: Record<string, TrackRecord>;
+  lessons: { scope: string; subject: string; session: string; kind: string; text: string }[];
+  stock_notes: StockNote[];
+  finetune: { role: string; examples: number; graded: number; accuracy: number | null; advice: string }[];
+  routing: { enabled: boolean; usage: TierUsage[] };
+}
+
+export interface FanPoint {
+  bar: number;
+  p5: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+}
+
+export interface DeskCard {
+  symbol: string;
+  entry: { status?: string; message?: string; time?: string; price?: number };
+  plan: { entry: number; stop: number; target: number; risk_per_share: number; reward_risk: number } | null;
+  plan_refused?: string | null;
+  odds: {
+    target_first_pct: number;
+    stop_first_pct: number;
+    neither_pct: number;
+    green_pct: number;
+    average_r: number;
+    after_costs: number | null;
+    replays: number;
+    sessions: number;
+    seed: number;
+    fan?: FanPoint[];
+    code: string;
+    verdict: string;
+    history?: { fired: number; target: number; stop: number; neither: number; sessions: number } | null;
+  } | null;
+  odds_unavailable?: string | null;
+  check: { verdict: string; qty: number; cost_inr: number; planned_loss_inr: number; decided_by: string; blocks: string[] } | null;
+  check_unavailable?: string | null;
+}
+
+export interface TradeDesk {
+  date: string;
+  checked_at: string;
+  status: string;
+  cards: DeskCard[];
+  alerts: { at: string; type: string; message: string }[];
+}
+
+export interface SwingCandidate {
+  symbol: string;
+  strategy: string;
+  date: string;
+  close: number;
+  stop: number;
+  target: number;
+  risk_pct: number;
+  vol_ratio?: number | null;
+  obv_rising?: boolean | null;
+  proven: boolean;
+  reason: string;
+}
+
+export interface SwingDesk {
+  candidates: {
+    date: string;
+    scanned: number;
+    candidates: SwingCandidate[];
+    skipped_for_events: Record<string, string>;
+    events_checked: boolean;
+    proven: string[];
+    notes: string[];
+  } | null;
+  positions: { symbol: string; qty: number; entry: string; stop: number | string; rule: string; target?: string | null; entered: string; strategy?: string | null; sessions_held: number }[];
+  closed: { symbol: string; at: string; price: string; net_inr?: string | null }[];
+  book: { cash: string; initial_cash: string; limits: Record<string, string>; open: number } | null;
+  scorecard: {
+    as_of: string;
+    sessions: number;
+    stocks: number;
+    eligible: string[];
+    strategies: Record<string, { eligible: boolean; reason: string; trades: number; net_inr: number; profit_factor: number | null; win_rate_pct: number | null }>;
+  } | null;
 }

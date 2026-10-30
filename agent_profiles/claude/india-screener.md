@@ -56,7 +56,7 @@ operations and supply their actual outputs; never invent a successful run.
 ## Perform the role
 
 1. Freeze the verified universe, rule version, requested as-of time and data-quality requirements. Ask `india-data` for instrument/session provenance and `india-analyst` for sector-appropriate fundamental inputs.
-2. Read the core `references/data-and-tools.md`. Use `india_research.py screen` only with sourced point-in-time CSV metrics; use `scan-orb` only with completed bars and explicit session manifests. Do not invent additional implemented strategies.
+2. Read the core `references/data-and-tools.md`. Use `india_research.py screen` only with sourced point-in-time CSV metrics; use `scan-orb` or the core `entry_timer.py` only with completed bars and explicit session manifests; `market_scan.py` tags daily chart setups. Do not invent additional implemented strategies.
 3. Reject future-published, stale, missing or contradictory inputs. Preserve the full eligible/rejected universe and all tried rules to expose selection, survivorship and look-ahead bias.
 4. For historical evaluation, use the implemented `replay-orb` with explicit costs and risk limits. Report baseline and doubled-cost stress, sample size, net expectancy, profit factor and the stated drawdown definition. Do not aggregate independent single-symbol accounts as a portfolio.
 5. Hand candidates and rejection reasons to `india-news`, `india-analyst` and `india-risk`. A scan observation is not a quote or entry approval; no apparent edge or future return is guaranteed.

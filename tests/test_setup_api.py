@@ -67,8 +67,8 @@ class SettingsTests(Isolated):
     def test_valid_save_is_versioned_backed_up_and_paper_only(self):
         path = self.config()
         view = settings_store.editable_view(path)
-        saved = settings_store.save(path, {"max_candidates": 2}, view["version"])
-        self.assertEqual(saved["settings"]["max_candidates"], 2)
+        saved = settings_store.save(path, {"max_candidates": 10}, view["version"])
+        self.assertEqual(saved["settings"]["max_candidates"], 10)
         self.assertNotEqual(saved["version"], view["version"])
         self.assertEqual(json.loads(path.read_text())["mode"], "paper_research")
         self.assertEqual(len(list(self.root.glob("pipeline.json.bak-*"))), 1)
@@ -81,6 +81,8 @@ class SettingsTests(Isolated):
             settings_store.save(path, {"max_candidates": 2}, "stale")
         with self.assertRaises(ValueError):
             settings_store.save(path, {"max_candidates": 99}, version)
+        with self.assertRaises(ValueError):
+            settings_store.save(path, {"max_candidates": 11}, version)
         with self.assertRaises(KeyError):
             settings_store.save(path, {"mode": "live"}, version)
         self.assertEqual(path.read_bytes(), before)
@@ -156,7 +158,7 @@ class EmailTests(Isolated):
 
             with (
                 patch("smtplib.SMTP", FakeSMTP),
-                patch.object(premarket, "public_mail_host", return_value=True),
+                patch.object(premarket, "mail_host_problem", return_value=None),
             ):
                 result = premarket.send_email(report, "<p>x</p>", config)
         self.assertTrue(result["sent"])
@@ -259,6 +261,55 @@ class HttpTests(Isolated):
         self.assertNotIn(SECRET, audit)
         self.assertIn('"keys_changed": ["KITE_API_SECRET"]', audit)
         self.assertTrue(self.get("/api/health")["paper_only"])
+
+    def test_learning_summary_is_readable_before_any_grading(self):
+        self.post("init_project", {})
+        summary = self.get("/api/setup/learning")
+        self.assertEqual(summary["sessions_graded"], 0)
+        self.assertFalse(summary["routing"]["enabled"])
+        status = {step["id"]: step["done"] for step in self.get("/api/setup/status")["steps"]}
+        self.assertTrue(status["model"])  # Rules-only is a valid, finished choice.
+
+    def test_routing_needs_its_provider_keys_before_the_model_step_is_done(self):
+        self.post("init_project", {})
+        version = self.get("/api/setup/settings")["version"]
+        routing = {
+            "enabled": True,
+            "tiers": [{"name": "free", "provider": "gemini", "model": "flash"}],
+            "simple": ["free"],
+            "complex": ["free"],
+            "escalate": True,
+            "cache": True,
+            "store_prompts": True,
+            "max_escalations_per_day": 10,
+        }
+        self.post("save_settings", {"version": version, "changes": {"routing": routing}})
+        done = lambda: {s["id"]: s["done"] for s in self.get("/api/setup/status")["steps"]}  # noqa: E731
+        self.assertFalse(done()["model"])
+        self.post("save_secret", {"key": "GEMINI_API_KEY", "value": "gemini-key-123456"})
+        self.assertTrue(done()["model"])
+
+    def test_openrouter_alone_finishes_the_model_step_and_the_check_never_leaks_the_key(self):
+        import openrouter
+
+        self.post("init_project", {})
+        version = self.get("/api/setup/settings")["version"]
+        changes = {"model_provider": "openrouter", "openrouter": {"max_usd_per_day": 0}}
+        self.post("save_settings", {"version": version, "changes": changes})
+        self.assertEqual(self.status_of(lambda: self.post("check_openrouter", {})), 409)
+        key = "sk-or-v1-abcdef1234567890"
+        self.post("save_secret", {"key": "OPENROUTER_API_KEY", "value": key})
+        reported = {"is_free_tier": True, "free_requests_today": {"remaining": 40, "limit": 50}}
+        with (
+            patch.object(openrouter, "key_status", lambda value: dict(reported)),
+            patch.object(openrouter, "catalogue", lambda folder: []),
+        ):
+            result = self.post("check_openrouter", {})
+        self.assertEqual(result["free_requests_today"]["remaining"], 40)
+        self.assertNotIn(key, json.dumps(result) + json.dumps(self.get("/api/setup/status")))
+        steps = {s["id"]: s["done"] for s in self.get("/api/setup/status")["steps"]}
+        self.assertTrue(steps["model"])
+        self.assertEqual(self.get("/api/setup/learning")["routing"]["enabled"], True)
 
     def test_logins_are_rate_limited(self):
         self.post("init_project", {})

@@ -34,8 +34,63 @@ KINDS: dict[str, dict[str, Any]] = {
     "tournament": {"label": "Strategy tournament", "argv": ["tournament.py"], "timeout": 900},
     "history": {
         "label": "Load 180 days of history",
-        "argv": ["data_sync.py", "--days", "180", "--max-symbols", "3"],
+        "argv": ["data_sync.py", "--days", "180", "--max-symbols", "10"],
         "timeout": 3600,
+    },
+    "scan_overnight": {
+        "label": "Overnight scan of all F&O stocks",
+        "argv": ["market_scan.py", "overnight"],
+        "timeout": 900,
+    },
+    "scan_open": {
+        "label": "Open scan (after 09:08)",
+        "argv": ["market_scan.py", "open"],
+        "timeout": 300,
+    },
+    "scan_confirm": {
+        "label": "09:31 check of the picks",
+        "argv": ["market_scan.py", "confirm"],
+        "timeout": 300,
+    },
+    "learn": {
+        "label": "Grade the agents and learn",
+        "argv": ["learning.py", "settle"],
+        "timeout": 600,
+    },
+    "finetune_export": {
+        "label": "Export fine-tuning data",
+        "argv": ["learning.py", "finetune-export", "--role", "all"],
+        "timeout": 600,
+    },
+    "desk_tick": {
+        "label": "Run the trade desk now (entry, plan, odds, check, alerts)",
+        "argv": ["trade_desk.py", "--once"],
+        "timeout": 300,
+    },
+    "swing_tournament": {
+        "label": "Swing tournament (which setups are proven)",
+        "argv": ["swing.py", "tournament"],
+        "timeout": 900,
+    },
+    "swing_scan": {
+        "label": "Swing scan for the next session",
+        "argv": ["swing.py", "scan"],
+        "timeout": 300,
+    },
+    "swing_tick": {
+        "label": "Swing desk: enter and manage now",
+        "argv": ["swing.py", "tick"],
+        "timeout": 120,
+    },
+    "insiders": {
+        "label": "Insider-trading filings, last 7 days",
+        "argv": ["insider_tracker.py", "recent", "--days", "7", "--insiders-only"],
+        "timeout": 120,
+    },
+    "alerts_check": {
+        "label": "Check price alerts",
+        "argv": ["price_alerts.py", "check"],
+        "timeout": 120,
     },
     "reference": {
         "label": "Refresh NSE reference data",
@@ -43,6 +98,13 @@ KINDS: dict[str, dict[str, Any]] = {
         "timeout": 600,
     },
 }
+SUBCOMMAND_SCRIPTS = (
+    "learning.py",
+    "market_scan.py",
+    "insider_tracker.py",
+    "price_alerts.py",
+    "swing.py",
+)
 STATES = ("running", "succeeded", "failed", "timed_out", "interrupted")
 
 
@@ -82,6 +144,8 @@ class JobRunner:
         if script == "reference.py":
             return [self.python, str(HERE / script), "--db",
                     str(self.config.parent / "reference.sqlite"), *rest]  # fmt: skip
+        if script in SUBCOMMAND_SCRIPTS:  # Subcommands follow --config.
+            return [self.python, str(HERE / script), "--config", str(self.config), *rest]
         return [self.python, str(HERE / script), *rest, "--config", str(self.config)]
 
     def start(self, kind: str, command: list[str] | None = None) -> dict:

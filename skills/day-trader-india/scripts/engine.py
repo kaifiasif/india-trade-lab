@@ -754,7 +754,10 @@ class OpeningRangeBreakout:
             bounds = self.ranges.setdefault(quote.symbol, [quote.high, quote.low])
             bounds[0], bounds[1] = max(bounds[0], quote.high), min(bounds[1], quote.low)
             return None
-        if context["entries_today"].get(quote.symbol) or quote.symbol not in self.ranges:
+        if context["entries_today"].get(quote.symbol):
+            self.last_reason[symbol] = "One entry a day: already traded, managing the position"
+            return None
+        if quote.symbol not in self.ranges:
             return None
         high, low = self.ranges[quote.symbol]
         self.last_reason[symbol] = "Waiting for a completed close above the opening range"

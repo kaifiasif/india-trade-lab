@@ -28,10 +28,11 @@ const SECTIONS: { id: string; label: string; note: string; keys: string[] }[] = 
   { id: "email", label: "Email", note: "The app password is set in Setup → Email and never shown here.", keys: ["smtp_host", "smtp_port", "smtp_user", "email_from", "email_to"] },
   { id: "strategy", label: "Strategies", note: "Which strategies may compete, and how they exit.", keys: ["strategy", "autopilot"] },
   { id: "agents", label: "Agents", note: "Debate, memory and the selection judge.", keys: ["selection", "debate", "memory", "market_feeds"] },
+  { id: "learning", label: "Learning", note: "How mistakes feed back, smart model routing and OpenRouter caps (easier to set in Setup → Research model).", keys: ["learning", "routing", "openrouter"] },
 ];
 
 const LABELS: Record<string, [string, string?]> = {
-  max_candidates: ["Stocks to assess each day", "1 to 3."],
+  max_candidates: ["Most stocks to pick each day", "1 to 10. The judge can still pick fewer, or none."],
   screening_mode: ["Screening", "Liquidity ranks by turnover; relative strength by move versus the index."],
   review_workflow: ["Agent workflow", "Debate adds a bull and bear round per stock."],
   poll_seconds: ["Check prices every (seconds)"],
@@ -63,7 +64,7 @@ const LABELS: Record<string, [string, string?]> = {
 const CHOICES: Record<string, string[]> = {
   screening_mode: ["liquidity", "relative_strength"],
   review_workflow: ["intraday", "intraday_debate"],
-  model_provider: ["disabled", "gemini", "anthropic", "openai", "local"],
+  model_provider: ["disabled", "openrouter", "gemini", "anthropic", "openai", "local"],
   reasoning_effort: ["low", "medium", "high"],
 };
 
@@ -190,8 +191,12 @@ export function SettingsPage() {
     }
   }, []);
   useEffect(() => {
+    if (status && !status.config_exists) {
+      setMissing(true); // No project yet: nothing to load, so no request.
+      return;
+    }
     load();
-  }, [load, status?.config_exists]);
+  }, [load, status, status?.config_exists]);
 
   const changes = useMemo(() => {
     if (!view) return {};

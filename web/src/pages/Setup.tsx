@@ -11,7 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Field, Progress } from "@/components/ui/misc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { JobRunner, SecretField, explain } from "@/components/setup-kit";
+import { RoutingEditor } from "@/components/RoutingEditor";
 import { Mascot, type Mood } from "@/mascots/Mascot";
 import type { MascotKey } from "@/mascots/data";
 import { Confetti } from "@/mascots/Confetti";
@@ -126,7 +128,7 @@ function ProfileStep() {
       <Field label="Send the morning report to" htmlFor="to" hint="Up to five addresses, separated by commas." error={errors.email_to}>
         <Input id="to" type="text" inputMode="email" value={to} onChange={(event) => setTo(event.target.value)} autoComplete="email" />
       </Field>
-      <Field label="Send from (optional)" htmlFor="from" hint="Leave empty to send from the Gmail account you connect." error={errors.email_from}>
+      <Field label="Send from (optional)" htmlFor="from" hint="Leave empty to send from the address you set in Email delivery." error={errors.email_from}>
         <Input id="from" type="email" value={from} onChange={(event) => setFrom(event.target.value)} />
       </Field>
       <Button type="submit" className="w-fit" disabled={busy !== null}>
@@ -315,6 +317,7 @@ function EmailStep() {
 
 const PROVIDERS = [
   { id: "disabled", label: "None (rules only)", key: null, hint: "The desk still screens, sizes and journals; specialists and the judge are skipped." },
+  { id: "openrouter", label: "OpenRouter (one key, the desk picks models)", key: "OPENROUTER_API_KEY", hint: "Key from openrouter.ai/keys. Free models do the simple jobs; a capped paid model judges." },
   { id: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", hint: "Has a free tier at aistudio.google.com." },
   { id: "anthropic", label: "Anthropic Claude", key: "ANTHROPIC_API_KEY", hint: "Key from console.anthropic.com." },
   { id: "openai", label: "OpenAI", key: "OPENAI_API_KEY", hint: "Key from platform.openai.com." },
@@ -325,8 +328,13 @@ function ModelStep() {
   const { setup: status, refreshSetup } = useData();
   const [provider, setProvider] = useState(status?.model?.provider ?? "disabled");
   const [model, setModel] = useState(String(status?.settings?.model ?? ""));
+  const savedCaps = (status?.settings?.openrouter ?? {}) as { max_usd_per_day?: number };
+  const [cap, setCap] = useState(String(savedCaps.max_usd_per_day ?? 0.5));
+  const [freeOnly, setFreeOnly] = useState(savedCaps.max_usd_per_day === 0);
   const { busy, run } = useBusy();
   const chosen = PROVIDERS.find((item) => item.id === provider) ?? PROVIDERS[0];
+  const auto = provider === "openrouter";
+  const dollars = Math.max(0, Math.min(100, Number(cap) || 0));
   return (
     <div className="grid max-w-lg gap-5">
       <form
@@ -335,7 +343,9 @@ function ModelStep() {
           event.preventDefault();
           run("model", async () => {
             try {
-              await saveSettings({ model_provider: provider, model: provider === "disabled" ? "" : model.trim() });
+              const changes: Record<string, unknown> = { model_provider: provider, model: provider === "disabled" || auto ? "" : model.trim() };
+              if (auto) changes.openrouter = { ...savedCaps, max_usd_per_day: freeOnly ? 0 : dollars };
+              await saveSettings(changes);
               await refreshSetup();
               toast.success("Research model saved");
             } catch (error) {
@@ -358,7 +368,24 @@ function ModelStep() {
             </SelectContent>
           </Select>
         </Field>
-        {provider !== "disabled" && (
+        {auto && (
+          <div className="grid gap-3 rounded-lg border p-4">
+            <p className="text-sm text-muted-foreground">
+              No model names to pick. Each morning the desk reads OpenRouter's model list and chooses: free models that return strict JSON for the
+              specialists, and the best paid model within your price caps for the judge. Models that answer badly or call it wrong lose their place.
+              Choosing costs no tokens.
+            </p>
+            <label className="flex items-center gap-3 text-sm">
+              <Switch checked={freeOnly} onCheckedChange={setFreeOnly} /> Free models only (never spend money)
+            </label>
+            {!freeOnly && (
+              <Field label="Most to spend per day (USD)" htmlFor="or-cap" hint="Paid models stop for the day at this amount. A typical day costs a few cents.">
+                <Input id="or-cap" inputMode="decimal" className="num w-32" value={cap} onChange={(event) => setCap(event.target.value.replace(/[^\d.]/g, ""))} />
+              </Field>
+            )}
+          </div>
+        )}
+        {provider !== "disabled" && !auto && (
           <Field label="Model name" htmlFor="model" hint="The exact identifier from the provider, e.g. gemini-2.5-flash.">
             <Input id="model" value={model} onChange={(event) => setModel(event.target.value)} className="font-mono" required />
           </Field>
@@ -367,7 +394,58 @@ function ModelStep() {
           {busy && <Loader2 className="animate-spin" />} Save model
         </Button>
       </form>
-      {chosen.key && <SecretField name={chosen.key} label={`${chosen.label} key`} />}
+      {chosen.key && <SecretField name={chosen.key} label={auto ? "OpenRouter key" : `${chosen.label} key`} />}
+      {auto && <OpenRouterCheck />}
+      {!auto && <RoutingEditor />}
+    </div>
+  );
+}
+
+interface KeyStatus {
+  is_free_tier?: boolean | null;
+  free_requests_today: { used?: number | null; limit?: number | null; remaining?: number | null };
+  usage_today_usd?: number | null;
+  models: { free: number; paid_within_caps: number } | null;
+}
+
+/** What OpenRouter reports for the saved key. The key itself never comes back. */
+function OpenRouterCheck() {
+  const { setup: status } = useData();
+  const [result, setResult] = useState<KeyStatus | null>(null);
+  const { busy, run } = useBusy();
+  const free = result?.free_requests_today;
+  return (
+    <div className="grid gap-2">
+      <Button
+        variant="outline"
+        className="w-fit"
+        disabled={busy !== null || !status?.secrets?.OPENROUTER_API_KEY?.set}
+        onClick={() =>
+          run("check", async () => {
+            try {
+              setResult(await setup<KeyStatus>("check_openrouter"));
+            } catch (error) {
+              toast.error("Key check failed", explain(error));
+            }
+          })
+        }
+      >
+        {busy === "check" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Check key
+      </Button>
+      {result && (
+        <dl className="num grid grid-cols-2 gap-x-4 gap-y-1 rounded-md bg-muted/50 px-3 py-2 text-sm">
+          <dt className="text-muted-foreground">Free requests left today</dt>
+          <dd>{free?.remaining != null ? `${free.remaining} of ${free.limit}` : "not reported"}</dd>
+          <dt className="text-muted-foreground">Spent today</dt>
+          <dd>${(result.usage_today_usd ?? 0).toFixed(3)}</dd>
+          <dt className="text-muted-foreground">Models the desk can use</dt>
+          <dd>{result.models ? `${result.models.free} free · ${result.models.paid_within_caps} paid within caps` : "list unavailable"}</dd>
+        </dl>
+      )}
+      <p className="text-xs text-muted-foreground">
+        OpenRouter's free models allow 20 requests a minute, and 50 a day until you have bought 10 credits, then 1,000 a day. A desk day uses
+        about 30–60.
+      </p>
     </div>
   );
 }
@@ -434,7 +512,7 @@ function StocksStep() {
       </div>
 
       <div className={cn("grid gap-3", !uploaded && "pointer-events-none opacity-50")} aria-disabled={!uploaded}>
-        <p className="text-sm font-medium">2. Pick one to three stocks</p>
+        <p className="text-sm font-medium">2. Pick one to ten stocks</p>
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by symbol or company" className="pl-9" aria-label="Search stocks" />
@@ -458,7 +536,7 @@ function StocksStep() {
                 <li key={match.symbol}>
                   <button
                     className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
-                    disabled={!chosen && picked.length >= 3}
+                    disabled={!chosen && picked.length >= 10}
                     onClick={() => setPicked(chosen ? picked.filter((item) => item !== match.symbol) : [...picked, match.symbol])}
                   >
                     <span className="w-24 font-medium">{match.symbol}</span>
@@ -548,47 +626,81 @@ function TournamentStep() {
   );
 }
 
-function BookStep() {
+type BookValues = { cash_inr: string; risk_inr: string; daily_loss_inr: string; position_limit_inr: string };
+
+function BookForm({ action, title, note, defaults, exists, needsStocks }: { action: string; title: string; note: string; defaults: BookValues; exists: boolean; needsStocks: boolean }) {
   const { setup: status, refreshSetup, refreshState } = useData();
-  const [values, setValues] = useState({ cash_inr: "100000", risk_inr: "250", daily_loss_inr: "750", position_limit_inr: "15000" });
+  const [values, setValues] = useState<BookValues>(defaults);
   const { busy, run } = useBusy();
-  if (status?.book) return <Done>Your paper book exists. It is never overwritten; its journal is sealed with a checksum.</Done>;
-  const fields: [keyof typeof values, string, string][] = [
+  const fields: [keyof BookValues, string, string][] = [
     ["cash_inr", "Virtual cash", "Pretend money; no real funds move."],
     ["risk_inr", "Risk per trade", "Loss if a stop is hit, before costs."],
-    ["daily_loss_inr", "Daily loss limit", "The desk stops for the day after this."],
+    ["daily_loss_inr", "Daily loss limit", "No new entries once losses and open risk reach this."],
     ["position_limit_inr", "Largest position", "Most rupees in one stock."],
   ];
+  const id = (key: string) => `${action}-${key}`;
   return (
-    <form
-      className="grid max-w-lg gap-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        run("book", async () => {
-          try {
-            await setup("create_book", values);
-            await Promise.all([refreshSetup(), refreshState()]);
-            toast.success("Paper book created", `${rupees(values.cash_inr)} of virtual cash.`);
-          } catch (error) {
-            toast.error("Book not created", explain(error));
-          }
-        });
-      }}
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        {fields.map(([key, label, hint]) => (
-          <Field key={key} label={label} htmlFor={key} hint={hint}>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
-              <Input id={key} inputMode="decimal" className="num pl-7" value={values[key]} onChange={(event) => setValues({ ...values, [key]: event.target.value.replace(/[^0-9.]/g, "") })} />
-            </div>
-          </Field>
-        ))}
-      </div>
-      <Button type="submit" className="w-fit" disabled={busy !== null || !status?.universe?.symbols?.length}>
-        {busy && <Loader2 className="animate-spin" />} Create paper book
-      </Button>
-    </form>
+    <section className="grid gap-3" aria-labelledby={`${action}-title`}>
+      <h3 id={`${action}-title`} className="font-semibold">{title}</h3>
+      <p className="-mt-2 text-sm text-muted-foreground">{note}</p>
+      {exists ? (
+        <Done>This book exists. It is never overwritten; its journal is sealed with a checksum.</Done>
+      ) : (
+        <form
+          className="grid max-w-lg gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            run(action, async () => {
+              try {
+                await setup(action, values);
+                await Promise.all([refreshSetup(), refreshState()]);
+                toast.success(`${title} created`, `${rupees(values.cash_inr)} of virtual cash.`);
+              } catch (error) {
+                toast.error("Book not created", explain(error));
+              }
+            });
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            {fields.map(([key, label, hint]) => (
+              <Field key={key} label={label} htmlFor={id(key)} hint={hint}>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+                  <Input id={id(key)} inputMode="decimal" className="num pl-7" value={values[key]} onChange={(event) => setValues({ ...values, [key]: event.target.value.replace(/[^0-9.]/g, "") })} />
+                </div>
+              </Field>
+            ))}
+          </div>
+          <Button type="submit" className="w-fit" disabled={busy !== null || !status?.config_exists || (needsStocks && !status?.universe?.symbols?.length)}>
+            {busy && <Loader2 className="animate-spin" />} Create {title.toLowerCase()}
+          </Button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+function BookStep() {
+  const { setup: status } = useData();
+  return (
+    <div className="grid gap-8">
+      <BookForm
+        action="create_book"
+        title="Intraday book"
+        note="₹1 lakh for day trades: everything is squared off by 15:15."
+        defaults={{ cash_inr: "100000", risk_inr: "250", daily_loss_inr: "750", position_limit_inr: "15000" }}
+        exists={Boolean(status?.book)}
+        needsStocks
+      />
+      <BookForm
+        action="create_swing_book"
+        title="Swing book"
+        note="₹1 lakh for swing trades held up to 5 sessions. At most three open, two new a day. Overnight gaps can cost more than the stop."
+        defaults={{ cash_inr: "100000", risk_inr: "500", daily_loss_inr: "1500", position_limit_inr: "25000" }}
+        exists={Boolean(status?.swing_book)}
+        needsStocks={false}
+      />
+    </div>
   );
 }
 

@@ -20,6 +20,7 @@ SECRET_KEYS = {
     "KITE_API_KEY": "Kite Connect API key",
     "KITE_API_SECRET": "Kite Connect API secret",
     "SMTP_PASSWORD": "Email app password (SMTP)",
+    "OPENROUTER_API_KEY": "OpenRouter API key",
     "GEMINI_API_KEY": "Gemini API key",
     "ANTHROPIC_API_KEY": "Anthropic API key",
     "OPENAI_API_KEY": "OpenAI API key",

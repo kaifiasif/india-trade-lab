@@ -259,13 +259,34 @@ def collect_symbol(
     return items, notes, read
 
 
-def collect(config_path: Path, cutoff: dt.datetime | None = None, fetch=_get) -> dict[str, Any]:
-    """Collect evidence for every mapped instrument and write research-evidence.json."""
+def collect(
+    config_path: Path, cutoff: dt.datetime | None = None, fetch=_get, shortlist: bool = False
+) -> dict[str, Any]:
+    """Collect evidence for every mapped instrument and write research-evidence.json.
+
+    With ``shortlist``, collect for this morning's market-scan shortlist instead of the
+    stock list, so the agents can read news on every stock the scan put forward.
+    """
     from decision_pipeline import DailyCoordinator
 
     coordinator = DailyCoordinator(config_path)
     clock = (cutoff or dt.datetime.now(IST)).astimezone(IST)
-    universe = json.loads(coordinator.path("universe").read_text(encoding="utf-8"))
+    universe = (
+        json.loads(coordinator.path("universe").read_text(encoding="utf-8"))
+        if (coordinator.path("universe").is_file())
+        else {"instruments": []}
+    )
+    limit = 10
+    if shortlist:
+        import market_scan
+
+        scan = json.loads(
+            market_scan.scan_path(coordinator.config_path.parent, clock.date()).read_text("utf-8")
+        )
+        universe = {
+            "instruments": [{"symbol": r["symbol"], "name": r["name"]} for r in scan["shortlist"]]
+        }
+        limit = 30
     destination = coordinator.path("research_evidence")
     # Previously collected items are dated and still point in time. An outage must not
     # delete them: only a source that actually answered may replace what it covers.
@@ -286,7 +307,7 @@ def collect(config_path: Path, cutoff: dt.datetime | None = None, fetch=_get) ->
             market += [(url, item) for item in parse_feed(fetch(url, {}, {}), clock)]
         except ValueError as exc:
             notes.append(f"market feed unavailable ({exc})")
-    for instrument in universe.get("instruments", [])[:10]:
+    for instrument in universe.get("instruments", [])[:limit]:
         symbol = instrument.get("symbol", "")
         company = instrument.get("name", "")
         items, symbol_notes, read = collect_symbol(symbol, company, clock, fetch)
@@ -339,10 +360,13 @@ def main(argv: list[str] | None = None) -> int:
     gather = sub.add_parser("collect", help="Write research-evidence.json for the mapped universe")
     gather.add_argument("--config", type=Path, default=Path("data/observatory/pipeline.json"))
     gather.add_argument("--as-of", help="Aware ISO cutoff; defaults to now")
+    gather.add_argument(
+        "--scan-shortlist", action="store_true", help="Collect for this morning's scan shortlist"
+    )
     args = parser.parse_args(argv)
     try:
         cutoff = dt.datetime.fromisoformat(args.as_of) if args.as_of else None
-        print(json.dumps(collect(args.config, cutoff), indent=2))
+        print(json.dumps(collect(args.config, cutoff, shortlist=args.scan_shortlist), indent=2))
         return 0
     except (ValueError, KeyError, TypeError, OSError) as exc:
         print("DATA_BLOCK: " + str(exc))

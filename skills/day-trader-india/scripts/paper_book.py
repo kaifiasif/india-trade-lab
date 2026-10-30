@@ -64,8 +64,15 @@ def create(
     max_open: int = 2,
     max_loss_streak: int = 2,
     drawdown_stop: Numeric | None = None,
+    style: str = "intraday",
 ) -> dict[str, Any]:
-    """Create a virtual book with event history and explicit entry limits."""
+    """Create a virtual book with event history and explicit entry limits.
+
+    ``style="swing"`` makes a separate book whose positions may be held overnight
+    (the swing desk exits them within its holding period). Every other limit applies.
+    """
+    if style not in ("intraday", "swing"):
+        raise ValueError("Book style must be intraday or swing")
     instruments = sorted(set(symbols.split(",")))
     if not instruments or any(not re.fullmatch(r"(NSE|BSE):[A-Z0-9&.\-]+", s) for s in instruments):
         raise ValueError("Allowlist must contain exchange-qualified symbols, e.g. NSE:TCS")
@@ -111,8 +118,40 @@ def create(
         "events": [],
         "realized_by_day": {},
     }
+    if style == "swing":
+        state["style"] = (
+            "swing"  # Only swing books carry the field; intraday digests are unchanged.
+        )
     if not replay:
         enforce_forward_policy(state)
+    return seal_state(state)
+
+
+def allow_symbols(book: dict[str, Any], symbols: list[str], source: str, at: str) -> dict[str, Any]:
+    """A new state whose stock list also holds ``symbols``, with the change logged.
+
+    The market scan picks new stocks each morning; the book must accept them or every
+    pick would be refused. Only additions: nothing held or recorded changes, and every
+    other limit still applies at each fill.
+    """
+    verify_state(book)
+    if book.get("mode") != "paper_manual":
+        raise ValueError("Only the forward paper book's stock list is extended")
+    wanted = sorted(set(symbols))
+    if (
+        not wanted
+        or len(wanted) > 10
+        or any(not re.fullmatch(r"NSE:[A-Z0-9&.\-]+", symbol) for symbol in wanted)
+    ):
+        raise ValueError("Add 1-10 exchange-qualified NSE symbols, e.g. NSE:TCS")
+    added = [symbol for symbol in wanted if symbol not in book["symbols"]]
+    if not added:
+        return book
+    state = copy.deepcopy(book)
+    state["symbols"] = sorted(set(state["symbols"]) | set(added))
+    state.setdefault("allowlist_changes", []).append(
+        {"at": timestamp(at).isoformat(), "added": added, "source": source[:120]}
+    )
     return seal_state(state)
 
 
@@ -212,7 +251,7 @@ def fill(
             raise ValueError("Quantity must be positive whole shares")
         if symbol in positions:
             raise ValueError("Close the existing symbol position before re-entry")
-        if any(p["day"] != day for p in positions.values()):
+        if state.get("style") != "swing" and any(p["day"] != day for p in positions.values()):
             raise ValueError("Close prior-day paper positions before new entries")
         stop, reserve = number(stop, True), number(exit_fee)
         if not stop < px:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run one scheduled India Trade Lab job with the private env files loaded.
-# Usage: run.sh premarket | market | aftermarket | observatory
+# Usage: run.sh premarket | open | confirm | market | aftermarket | observatory
 # Paper research only: nothing here places an order.
 set -euo pipefail
 
@@ -42,15 +42,31 @@ case "$job" in
   premarket)
     python3 scripts/reference.py --db "$DATA/reference.sqlite" refresh \
       || echo "NSE reference refresh failed; the report will use cached reference data."
-    python3 scripts/evidence.py collect --config "$CONFIG" \
-      || echo "News collection failed; the report will use previously collected headlines."
+    # With the market scan on: positioning, events and the overnight shortlist now;
+    # the report itself is built at 09:09, after the pre-open auction.
+    if python3 scripts/market_scan.py --config "$CONFIG" overnight; then
+      python3 scripts/evidence.py collect --config "$CONFIG" --scan-shortlist \
+        || echo "News collection failed; the report will use previously collected headlines."
+    else
+      echo "Market scan failed; the report will use the fixed stock list."
+      python3 scripts/evidence.py collect --config "$CONFIG" \
+        || echo "News collection failed; the report will use previously collected headlines."
+    fi
+    exec python3 scripts/premarket.py --config "$CONFIG" --email --skip-when-scan ;;
+  open)
+    # 09:09: pre-open gap and strength against the Nifty, then the agents and judge.
+    python3 scripts/market_scan.py --config "$CONFIG" open \
+      || echo "Open scan failed; ranking on overnight signals only."
     exec python3 scripts/premarket.py --config "$CONFIG" --email ;;
+  confirm)
+    # 09:31: volume, VWAP and strength for the judge's picks; failures are not entered.
+    exec python3 scripts/market_scan.py --config "$CONFIG" confirm ;;
   market)
     exec python3 scripts/market_service.py --config "$CONFIG" --refresh-india --prepare ;;
   aftermarket)
     # Today's completed session into history, while today's Kite token is still valid,
     # then re-run the strategy tournament so tomorrow trades only what is still proven.
-    python3 scripts/data_sync.py --config "$CONFIG" --days 90 --max-symbols 3 \
+    python3 scripts/data_sync.py --config "$CONFIG" --days 90 --max-symbols 10 \
       || echo "History sync failed; the tournament will use the history already stored."
     # Fridays: write the week's paper track record, ready to publish.
     if [ "$(date +%u)" = "5" ]; then
@@ -58,8 +74,19 @@ case "$job" in
       python3 scripts/itl.py --config "$CONFIG" track --days 7 \
         > "$DATA/reports/track-$(date +%F).md" || true
     fi
-    exec python3 scripts/tournament.py --config "$CONFIG" ;;
+    python3 scripts/market_scan.py --config "$CONFIG" nightly \
+      || echo "Daily candles for the scan were not refreshed; the morning scan will fetch them."
+    # Swing desk: re-prove its setups on today's candles, then pick tomorrow's candidates.
+    python3 scripts/swing.py --config "$CONFIG" tournament \
+      || echo "Swing tournament did not run; yesterday's scorecard stays."
+    python3 scripts/swing.py --config "$CONFIG" scan \
+      || echo "Swing scan did not run; the swing desk will not enter tomorrow."
+    python3 scripts/tournament.py --config "$CONFIG" \
+      || echo "Tournament failed; yesterday's scorecard stays until it expires."
+    # Grade every agent's calls on today's completed session and paper trades, and
+    # write the lessons and stock notes tomorrow's agents will read.
+    exec python3 scripts/learning.py --config "$CONFIG" settle ;;
   *)
-    echo "Usage: run.sh premarket | market | aftermarket | observatory" >&2
+    echo "Usage: run.sh premarket | open | confirm | market | aftermarket | observatory" >&2
     exit 64 ;;
 esac

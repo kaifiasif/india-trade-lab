@@ -32,7 +32,7 @@ it, but no derivative position is sized or placed.
    citing evidence IDs from that slice only:
    `news-analyst`, `sentiment-analyst`, `technical-analyst`, `sector-analyst`,
    `liquidity-analyst`, `brokerage-analyst`.
-3. **Sub-agents.** For up to three finalists, the judge spawns a risk scout
+3. **Sub-agents.** For each finalist (up to 10, set by `selection.finalists`), the judge spawns a risk scout
    (low, medium or high risk today) and a setup planner (which proven strategy
    fits, or none). Code drops any pick rated high risk or with no setup. See
    [strategy.md](strategy.md).
@@ -61,7 +61,7 @@ judge uses `deep_model`, and `model_routes` can override any role. Raise
 ```json
 "selection": {
   "agents": true,
-  "pool": 10,
+  "pool": 20,
   "min_specialists": 4,
   "min_market_cap_tier": "large",
   "max_reference_age_days": 7

@@ -12,9 +12,11 @@ month with Claude.
 
 | Time | Job | Needs today's Kite login |
 |---|---|---|
-| 08:40 | NSE reference refresh, news collection (Google News, NSE filings, ET Markets), pre-market report emailed to you | No |
+| 08:40 | NSE reference refresh, then the overnight scan of every F&O stock (positioning, delivery, large deals, upcoming events) and news for the shortlist | No |
+| 09:09 | Open scan on the pre-open prices, then the agents and the judge; picks emailed. Confirm your two checks for the picks in the dashboard | No |
+| 09:31 | Volume and VWAP check of the picks; unconfirmed picks are not entered | No |
 | 09:05–15:50 | Research worker: live Kite quotes and candles, agent reviews and debates; with the autopilot on, it records approved paper entries and exits itself | Yes |
-| 16:10 | Today's completed session saved into history, then the strategy tournament re-run, so tomorrow trades only what is still proven | Yes |
+| 16:10 | Today's completed session saved into history, the strategy tournament re-run, then every agent graded on the day so tomorrow's agents read their lessons | Yes |
 | Always | Dashboard on the server's loopback, reached through an SSH tunnel | No |
 
 Jobs skip themselves on days that are not in `sessions.json`.
@@ -97,8 +99,12 @@ steps did is there:
 - **Email delivery**: pick Gmail (or another service), enter your address and a
   16-character Gmail **app password** (needs 2-Step Verification), then press
   *Send a test email*.
-- **Research model**: optional. Pick a provider, paste its key and the exact
-  model ID (for Gemini's free tier, copy it from Google AI Studio).
+- **Research model**: optional. The simplest choice is OpenRouter: paste one
+  key, set a daily dollar cap or choose free models only, and the desk picks
+  the models. Or pick a provider, paste its key and the exact model ID (for
+  Gemini's free tier, copy it from Google AI Studio).
+  Turn on **Smart routing** there to send the simple jobs to a free tier and only
+  the judge to a stronger one, with the daily limits your key shows.
 - **Choose stocks**: upload NSE's `EQUITY_L.csv` (download it from nseindia.com on
   your phone if needed), search, and pick one to three stocks.
 - **Load history**, **Run the tournament**, **Create the paper book** and
@@ -127,8 +133,8 @@ The command-line route still works (`deploy/oracle/login.sh`, then
 
 ## 6. Every trading morning (about 2 minutes, from the phone)
 
-Before 09:05, open the dashboard through the tunnel and do **Setup → Today's
-Kite login**, then **Today's checks**. Kite requires this daily login; it cannot
+Before 08:40, open the dashboard through the tunnel and do **Setup → Today's
+Kite login**. After the picks arrive at about 09:11, do **Today's checks** for them. Kite requires this daily login; it cannot
 be automated around. Entries stay blocked until both checks are answered. The
 pre-market report also arrives by email each morning, and copies are kept in
 `data/observatory/reports/`.

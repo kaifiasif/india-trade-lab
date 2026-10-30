@@ -48,8 +48,9 @@ coordinator runs tools and records only explicitly requested virtual fills.
 | Historical evaluation | Next-bar hypothetical entry, fees/slippage, adverse stop gaps, ambiguous-bar stop-first handling, doubled-cost stress and closed-trade drawdown. |
 | Fundamental screening | User-sourced point-in-time CSV rules; future, stale and missing data fail. |
 | Virtual cash and risk | Local manual journal; cash/position/planned-risk limits, daily entry/open-position caps, loss-streak/drawdown stops, pause, quote freshness and duplicate IDs. |
-| Portfolio/news/disclosures | Guided evidence review; no automatic rebalancing, tax engine, news ingestion or disclosure copying. |
-| Current prices/continuous paper execution | Mapped read-only quote polling is available when configured. No continuous paper-fill execution; journal stops/targets do not execute automatically. |
+| Portfolio/news/disclosures | Guided evidence review; no automatic rebalancing or tax engine. NSE quarterly-results XBRL (`results_analyst.py`) and SEBI insider-trading filings (`insider_tracker.py`) are read into the scan; nothing copies a disclosed trade. |
+| Trade tools | `entry_timer.py`, `exit_planner.py`, `time_machine.py` (replays from stored sessions), `trade_check.py` (budget and risk against the paper book) and `price_alerts.py`; the desk agent (`trade_desk.py`) runs them every worker tick. |
+| Current prices/continuous paper execution | Mapped read-only quote polling is available when configured. The paper autopilot, when switched on, records approved paper entries and managed exits; price alerts ring on stops, targets and square-off. |
 | Scheduled research | Explicitly started worker, mapped Kite/Paytm quotes and Kite/Upstox bars, six or ten model-role handoffs, final paper proposals and audit log; requires private configuration and refreshed evidence. |
 | US/crypto | India/US dated session router with DST; Binance read-only spot observations. US decisions and crypto paper execution are not implemented. |
 | Real-money orders | No implementation, connector or authorization in this skill. |
@@ -213,6 +214,40 @@ pullback), the loss-avoidance filters and managed exits (breakeven, trailing and
 time stops). `scripts/tournament.py` replays them on stored history with
 pessimistic fills and lets a strategy trade only if it is profitable at double
 costs; otherwise the desk sits out. Read [strategy.md](references/strategy.md).
+
+## Market scan
+
+`scripts/market_scan.py` lets the desk pick its own stocks. Code scans every F&O stock
+at 08:40, using futures positioning, delivery, large deals and upcoming events. At
+09:09 it adds the pre-open gap against the Nifty, and the agents judge the best 20 and pick up to ten.
+At 09:31 it checks each pick's volume and VWAP before entry. Read
+[market-scan.md](references/market-scan.md).
+
+## Trade tools and the desk agent
+
+Five tools follow one trade from trigger to alert, on NSE five-minute bars:
+`entry_timer.py` (first close above the opening range), `exit_planner.py` (stop and
+target before entry), `time_machine.py` (10,000 replays of the rest of the day from
+the stock's stored sessions, plus the same rule on past sessions), `trade_check.py`
+(size and PASS/BLOCK against the paper book's own limits) and `price_alerts.py`.
+`trade_desk.py` runs them for each pick on every session-worker tick; the time
+machine can veto an autopilot entry. Read [trade-tools.md](references/trade-tools.md).
+
+## Swing desk
+
+`scripts/swing.py` holds trades for up to five sessions, in its own paper book.
+It takes only volume-confirmed daily setups (a breakout on 2x volume, a pocket
+pivot, a pullback on drying volume) that its own tournament proved at double
+delivery costs. It enters after the open and exits at the stop, a trailing stop,
+the target or day five. Read [swing.md](references/swing.md).
+
+## Learning from mistakes and model routing
+
+`scripts/learning.py settle` grades every agent's calls each evening against the
+session and the paper trades. It writes lessons, stock notes and cooldowns that
+the next morning's agents read, all downgrade-only. `scripts/model_router.py`
+sends simple jobs to a free tier and the judge to a stronger one, with quotas, a
+same-day cache and escalation. Read [learning.md](references/learning.md).
 
 ## Check the setup before trusting a run
 

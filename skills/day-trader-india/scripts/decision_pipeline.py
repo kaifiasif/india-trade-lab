@@ -31,6 +31,7 @@ from watchlist import build_watchlist
 
 import engine
 import india_research
+import model_router
 import paper_book
 import strategies
 
@@ -66,9 +67,9 @@ OPTIONAL_CONFIG = {
     # Pre-market selection: hard filters first, then six specialist agents and a judge.
     "selection": {
         "agents": True,
-        "pool": 10,
+        "pool": 20,
         "min_specialists": 4,
-        "finalists": 3,
+        "finalists": 10,
         "min_market_cap_tier": "large",
         "max_reference_age_days": 7,
     },
@@ -87,8 +88,82 @@ OPTIONAL_CONFIG = {
         "managed_exits": True,
         "filters": True,
     },
+    # Learning from mistakes: each evening every agent's calls are graded against what
+    # the stock then did and against paper trades. Lessons and stock notes go back into
+    # the next prompts; repeated losers cool down. All of it can only narrow choices.
+    "learning": {
+        "enabled": True,
+        "lessons_in_prompts": True,
+        "stock_notes": True,
+        "cooldown": True,
+        "weight_specialists": True,
+        "min_graded": 20,
+    },
+    # Market scan: the desk finds its own stocks among all F&O names, ranked on signals
+    # that lead the open (positioning, pre-open strength, upcoming events), and checks
+    # volume and VWAP after the first fifteen minutes before any entry.
+    "scan": {
+        "enabled": False,
+        "shortlist": 25,
+        "max_gap_up_pct": 3.0,
+        "max_gap_down_pct": 1.5,
+        "event_window_days": 5,
+        "min_rvol": 1.5,
+        "require_confirmation": True,
+        "insiders": True,
+        "results_for": 12,
+    },
+    # The trade desk agent runs the Entry Timer, Exit Planner, Time Machine, trade check
+    # and Price Alerts on every session tick, for each of today's picks.
+    "trade_desk": {"enabled": True},
+    # Swing desk: up to 5-session holds on volume-confirmed daily setups, in its own paper
+    # book (swing.sqlite). Only setups proven by the swing tournament are entered.
+    "swing": {
+        "enabled": True,
+        "book": "swing.sqlite",
+        "max_hold_days": 5,
+        "max_new_per_day": 2,
+        "require_proven": True,
+        "min_vol_ratio": 2.0,
+        "max_gap_up_pct": 3.0,
+        "event_window_days": 7,
+        "target_r": 2.0,
+        "fee_bps": 12.0,
+        "fee_flat_inr": 20.0,
+        "slippage_bps": 5.0,
+    },
+    # Time Machine gate (downgrade only): skip autopilot entries whose replays lean
+    # toward the stop. Without 20 stored sessions the gate lets the entry through,
+    # unless require_history is true.
+    "timemachine": {"enabled": True, "replays": 5000, "require_history": False},
+    # Price alerts: a stop, target and square-off alert for every paper entry, and
+    # email when one rings.
+    "alerts": {"email": False, "on_entries": True},
+    # OpenRouter with model_provider "openrouter": the desk picks models itself, free ones
+    # for simple jobs and a paid one under these caps for the judge (0 = free only).
+    "openrouter": {
+        "max_input_usd_per_mtok": 1.0,
+        "max_output_usd_per_mtok": 4.0,
+        "max_usd_per_day": 0.5,
+        "min_context": 16000,
+    },
+    # Smart routing: simple jobs to free tiers, hard ones to the strongest tier allowed,
+    # with quotas you enter, a same-day cache and escalation on bad answers.
+    "routing": {
+        "enabled": False,
+        "tiers": [],
+        "simple": [],
+        "complex": [],
+        "escalate": True,
+        "cache": True,
+        "store_prompts": True,
+        "max_escalations_per_day": 10,
+    },
 }
-NESTED_DEFAULTS = ("debate", "memory", "selection", "autopilot", "strategy")
+NESTED_DEFAULTS = (
+    "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
+    "openrouter", "trade_desk", "timemachine", "alerts", "swing",
+)  # fmt: skip
 
 DEFAULT_CONFIG = {
     **OPTIONAL_CONFIG,
@@ -97,7 +172,7 @@ DEFAULT_CONFIG = {
     "daily_profit_goal_inr": "80000.00",
     "model_provider": "disabled",
     "model": "",
-    "max_candidates": 3,
+    "max_candidates": 10,
     "max_model_calls_per_day": 60,
     "poll_seconds": 60,
     "fee_bps": "5",
@@ -275,17 +350,17 @@ class DailyCoordinator:
         if (
             type(chooser["agents"]) is not bool
             or type(chooser["pool"]) is not int
-            or not 1 <= chooser["pool"] <= 15
+            or not 1 <= chooser["pool"] <= 25
             or type(chooser["min_specialists"]) is not int
             or not 1 <= chooser["min_specialists"] <= 6
             or type(chooser["finalists"]) is not int
-            or not 1 <= chooser["finalists"] <= 5
+            or not 1 <= chooser["finalists"] <= 10
             or chooser["min_market_cap_tier"] not in ("large", "mid", "small")
             or type(chooser["max_reference_age_days"]) is not int
             or not 1 <= chooser["max_reference_age_days"] <= 31
         ):
             raise ValueError(
-                "Selection needs a pool of 1-15, a quorum of 1-6 specialists, a market-cap "
+                "Selection needs a pool of 1-25, a quorum of 1-6 specialists, a market-cap "
                 "tier of large/mid/small and a reference age of 1-31 days"
             )
         plan = cfg["strategy"]
@@ -306,6 +381,91 @@ class DailyCoordinator:
             )
         if any(type(value) is not bool for value in cfg["autopilot"].values()):
             raise ValueError("Autopilot settings must be true or false")
+        scan = cfg["scan"]
+        if (
+            type(scan["enabled"]) is not bool
+            or type(scan["require_confirmation"]) is not bool
+            or type(scan["shortlist"]) is not int
+            or not 10 <= scan["shortlist"] <= 50
+            or type(scan["event_window_days"]) is not int
+            or not 1 <= scan["event_window_days"] <= 10
+            or any(
+                not isinstance(scan[key], (int, float)) or not 0 < scan[key] <= 10
+                for key in ("max_gap_up_pct", "max_gap_down_pct", "min_rvol")
+            )
+        ):
+            raise ValueError(
+                "scan needs true/false switches, a shortlist of 10-50, an event window of "
+                "1-10 days and gap/volume limits between 0 and 10"
+            )
+        if type(scan["insiders"]) is not bool or (
+            type(scan["results_for"]) is not int or not 0 <= scan["results_for"] <= 25
+        ):
+            raise ValueError("scan insiders must be true/false and results_for 0-25")
+        machine = cfg["timemachine"]
+        if (
+            any(type(machine[key]) is not bool for key in ("enabled", "require_history"))
+            or type(machine["replays"]) is not int
+            or not 500 <= machine["replays"] <= 50_000
+            or any(type(value) is not bool for value in cfg["alerts"].values())
+            or type(cfg["trade_desk"]["enabled"]) is not bool
+        ):
+            raise ValueError(
+                "timemachine needs true/false switches and 500-50,000 replays; alerts and "
+                "trade_desk take true/false"
+            )
+        swing = cfg["swing"]
+        if (
+            any(type(swing[key]) is not bool for key in ("enabled", "require_proven"))
+            or not isinstance(swing["book"], str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,40}\.sqlite", swing["book"])
+            or swing["book"] == cfg["book"]
+            or type(swing["max_hold_days"]) is not int
+            or not 1 <= swing["max_hold_days"] <= 20
+            or type(swing["max_new_per_day"]) is not int
+            or not 1 <= swing["max_new_per_day"] <= 3
+            or type(swing["event_window_days"]) is not int
+            or not 1 <= swing["event_window_days"] <= 20
+            or any(
+                not isinstance(swing[key], (int, float)) or isinstance(swing[key], bool)
+                for key in (
+                    "min_vol_ratio",
+                    "max_gap_up_pct",
+                    "target_r",
+                    "fee_bps",
+                    "fee_flat_inr",
+                    "slippage_bps",
+                )
+            )  # fmt: skip
+            or not 1 <= swing["min_vol_ratio"] <= 10
+            or not 0 < swing["max_gap_up_pct"] <= 10
+            or not 1 <= swing["target_r"] <= 5
+            or not 0 <= swing["fee_bps"] <= 100
+            or not 0 <= swing["fee_flat_inr"] <= 500
+            or not 0 <= swing["slippage_bps"] <= 100
+        ):
+            raise ValueError(
+                "swing needs a separate .sqlite book, 1-20 hold days, 1-3 new trades a day, a "
+                "1-20 day event window, volume ratio 1-10, gap 0-10%, target 1-5R and sane costs"
+            )
+        router_caps = cfg["openrouter"]
+        if (
+            any(
+                not isinstance(router_caps[key], (int, float)) or not 0 <= router_caps[key] <= 100
+                for key in ("max_input_usd_per_mtok", "max_output_usd_per_mtok", "max_usd_per_day")
+            )
+            or type(router_caps["min_context"]) is not int
+            or not 4000 <= router_caps["min_context"] <= 2_000_000
+        ):
+            raise ValueError("openrouter caps must be 0-100 USD and min_context 4,000-2,000,000")
+        learn = cfg["learning"]
+        if any(type(learn[key]) is not bool for key in learn if key != "min_graded") or (
+            type(learn["min_graded"]) is not int or not 5 <= learn["min_graded"] <= 500
+        ):
+            raise ValueError("learning switches must be true/false and min_graded 5-500")
+        model_router.validate_routing(
+            cfg["routing"], model_providers.PROVIDERS, model_providers.MODEL_PATTERNS
+        )
         if cfg["smtp_host"] and not re.fullmatch(
             r"(?=.{1,253}$)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}", str(cfg["smtp_host"])
         ):
@@ -319,8 +479,8 @@ class DailyCoordinator:
         for key in DEFAULT_CONFIG:
             if key not in cfg:
                 raise ValueError(f"Missing pipeline setting: {key}")
-        if type(cfg["max_candidates"]) is not int or not 1 <= cfg["max_candidates"] <= 3:
-            raise ValueError("Model review budget permits 1–3 candidates per run")
+        if type(cfg["max_candidates"]) is not int or not 1 <= cfg["max_candidates"] <= 10:
+            raise ValueError("Pick 1–10 candidates per run")
         if (
             type(cfg["max_model_calls_per_day"]) is not int
             or not 0 <= cfg["max_model_calls_per_day"] <= 120
@@ -343,7 +503,7 @@ class DailyCoordinator:
         if reviewer is not None:
             self.reviewer = reviewer
         else:
-            self.reviewer = model_providers.configured_reviewer(cfg)
+            self.reviewer = model_providers.configured_reviewer(cfg, self.config_path.parent)
 
     def path(self, name: str) -> Path:
         value = self.config[name]
@@ -987,8 +1147,10 @@ def main() -> int:
     try:
         if args.command == "init":
             args.config.parent.mkdir(parents=True, exist_ok=True)
+            # New projects let the desk scan for its own stocks every morning.
+            config = {**DEFAULT_CONFIG, "scan": {**DEFAULT_CONFIG["scan"], "enabled": True}}
             with args.config.open("x", encoding="utf-8") as handle:
-                handle.write(json.dumps(DEFAULT_CONFIG, indent=2) + "\n")
+                handle.write(json.dumps(config, indent=2) + "\n")
             print(
                 "Created private paper-research configuration; populate sourced inputs before running"
             )

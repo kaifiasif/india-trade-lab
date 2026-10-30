@@ -57,6 +57,7 @@ RATE_PER_MINUTE = {
     "build_universe": 5,
     "save_secret": 20,
     "run_job": 10,
+    "check_openrouter": 6,
 }
 DEFAULT_RATE = 30
 
@@ -205,7 +206,32 @@ class SetupApi:
             "gemini": "GEMINI_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
             "openai": "OPENAI_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
         }.get(provider)
+        routing = settings.get("routing") or {}
+        if routing.get("enabled"):
+            needed = {
+                {
+                    "gemini": "GEMINI_API_KEY",
+                    "anthropic": "ANTHROPIC_API_KEY",
+                    "openai": "OPENAI_API_KEY",
+                    "openrouter": "OPENROUTER_API_KEY",
+                }.get(tier.get("provider"))  # fmt: skip
+                for tier in routing.get("tiers", [])
+            } - {None}
+            model_ready = all(secrets[key]["set"] for key in needed)
+        else:
+            model_ready = provider in ("disabled", "local") or bool(
+                provider_key and secrets[provider_key]["set"]
+            )
+        scanning = bool((settings.get("scan") or {}).get("enabled"))
+        if scanning:
+            # The desk picks its own stocks each morning; the list only seeds strategy history.
+            stocks_ready = (self.data_dir / "EQUITY_L.csv").is_file() and universe["exists"]
+            stocks_detail = "Upload NSE's stock list and pick 1-10 stocks to seed strategy testing; the daily scan picks the rest"
+        else:
+            stocks_ready = universe["exists"] and universe.get("age_days", 99) <= 30
+            stocks_detail = "NSE stock list plus today's Kite instrument list"
         today = str(dt.datetime.now(IST).date())
         try:
             attested = json.loads(
@@ -242,8 +268,8 @@ class SetupApi:
             ("kite_keys", "Kite Connect keys", kite["api_key"] and kite["api_secret"], "From developers.kite.trade (₹500/month Connect plan)"),
             ("kite_login", "Today's Kite login", kite["token"]["today"], "2FA login; tokens expire every morning"),
             ("email", "Email delivery", email["server"] and email["password"], "Mail server, sender and app password"),
-            ("model", "Research model", provider == "disabled" or bool(provider_key and secrets[provider_key]["set"]) or provider == "local", "Optional: the judge and agents need one"),
-            ("stocks", "Choose stocks", universe["exists"] and universe.get("age_days", 99) <= 30, "NSE stock list plus today's Kite instrument list"),
+            ("model", "Research model", model_ready, "Optional: the judge and agents need one"),
+            ("stocks", "Choose stocks", stocks_ready, stocks_detail),
             ("history", "Load history", enough, "At least 50 complete sessions per stock"),
             ("tournament", "Run the tournament", tournament["ran"], "Decides which strategies may trade"),
             ("book", "Create the paper book", (self.data_dir / "paper.sqlite").is_file(), "Virtual cash and loss limits"),
@@ -272,6 +298,7 @@ class SetupApi:
             "tournament": tournament,
             "attested_today": attested,
             "book": (self.data_dir / "paper.sqlite").is_file(),
+            "swing_book": (self.data_dir / "swing.sqlite").is_file(),
             "jobs": self.jobs.recent(),
             "job_kinds": {kind: spec["label"] for kind, spec in job_runner.KINDS.items()},
             "steps": [
@@ -288,6 +315,8 @@ class SetupApi:
             return settings_store.editable_view(self.config)
         if route == "/api/setup/jobs":
             return {"jobs": self.jobs.recent()}
+        if route == "/api/setup/learning":
+            return self.learning()
         if route.startswith("/api/setup/jobs/"):
             offset = int((query.get("offset") or ["0"])[0] or 0)
             try:
@@ -295,6 +324,44 @@ class SetupApi:
             except KeyError:
                 raise ApiError(404, "not_found", "No such job") from None
         raise ApiError(404, "not_found", "Not found")
+
+    def learning(self) -> dict:
+        """Track records, lessons, stock notes, fine-tune readiness and today's model use."""
+        import learning
+        import model_router
+
+        now = dt.datetime.now(IST)
+        path = self.data_dir / "learning.sqlite"
+        routing: dict = {}
+        if self.config.is_file():
+            try:
+                current = settings_store.editable_view(self.config)["settings"]
+                routing = current.get("routing") or {}
+                if not routing.get("enabled") and current.get("model_provider") == "openrouter":
+                    import model_providers
+
+                    routing = model_providers.openrouter_routing(current)
+            except (OSError, ValueError):
+                routing = {}
+        summary = (
+            learning.LearningStore(path).summary(now)
+            if path.is_file()
+            else {
+                "sessions_graded": 0,
+                "totals": {},
+                "track_records": {},
+                "lessons": [],
+                "stock_notes": [],
+                "finetune": [],
+            }  # fmt: skip
+        )
+        return {
+            **summary,
+            "routing": {
+                "enabled": bool(routing.get("enabled")),
+                "usage": model_router.usage_today(path, routing, now) if path.is_file() else [],
+            },
+        }
 
     # ---------- writes ----------
 
@@ -330,7 +397,9 @@ class SetupApi:
 
         created = []
         if not self.config.is_file():
-            self.config.write_text(json.dumps(DEFAULT_CONFIG, indent=2) + "\n", encoding="utf-8")
+            # Projects made from the dashboard let the desk scan for its own stocks.
+            config = {**DEFAULT_CONFIG, "scan": {**DEFAULT_CONFIG["scan"], "enabled": True}}
+            self.config.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
             created.append("pipeline.json")
         calendar = self.data_dir / "sessions.json"
         if not calendar.is_file():
@@ -436,6 +505,34 @@ class SetupApi:
             raise ApiError(502, "email_failed", result.get("reason", "Email could not be sent"))
         return result, {}, []
 
+    def do_check_openrouter(self, payload: dict, **_: Any):
+        """Free requests left today and spend, as OpenRouter reports them. Never the key."""
+        import openrouter
+
+        key = secret_store.get("OPENROUTER_API_KEY")
+        if not key:
+            raise ApiError(409, "key_required", "Save your OpenRouter API key first")
+        try:
+            status = openrouter.key_status(key)
+        except ValueError:
+            raise ApiError(
+                502, "openrouter_unreachable", "OpenRouter did not answer; check the key"
+            ) from None
+        try:
+            models = openrouter.catalogue(self.data_dir)
+            options = {
+                **openrouter.DEFAULTS,
+                **(settings_store.editable_view(self.config)["settings"].get("openrouter") or {}),
+            }
+            usable = [m for m in models if openrouter.usable(m, options)]
+            status["models"] = {
+                "free": sum(openrouter.is_free(m) for m in usable),
+                "paid_within_caps": sum(openrouter.within_caps(m, options) for m in usable),
+            }
+        except (ValueError, OSError):
+            status["models"] = None
+        return status, {}, []
+
     def do_save_settings(self, payload: dict, **_: Any):
         self._require_project()
         version, changes = payload.get("version"), payload.get("changes")
@@ -499,7 +596,7 @@ class SetupApi:
     def do_build_universe(self, payload: dict, **_: Any):
         symbols = payload.get("symbols")
         if not isinstance(symbols, list):
-            raise ApiError(422, "invalid", "Choose one to three stocks")
+            raise ApiError(422, "invalid", "Choose one to ten stocks")
         path = self.data_dir / "EQUITY_L.csv"
         if not path.is_file():
             raise ApiError(409, "equity_list_required", "Upload NSE's EQUITY_L.csv first")
@@ -564,6 +661,23 @@ class SetupApi:
             )
             conn.execute("INSERT INTO book VALUES (1, ?)", (json.dumps(book),))
         return {"ok": True, "cash": book["cash"], "symbols": symbols}, {}, ["paper.sqlite"]
+
+    def do_create_swing_book(self, payload: dict, **_: Any):
+        import swing
+
+        self._require_project()
+        try:
+            book = swing.create_book(
+                self.config,
+                str(payload.get("cash_inr", "100000")),
+                str(payload.get("risk_inr", "500")),
+                str(payload.get("daily_loss_inr", "1500")),
+                str(payload.get("position_limit_inr", "25000")),
+            )
+        except (ValueError, ArithmeticError) as error:
+            code = 409 if "already exists" in str(error) else 422
+            raise ApiError(code, "invalid", str(error)) from None
+        return {"ok": True, "cash": book["cash"]}, {}, [swing.settings(self.config)["book"]]
 
     def do_run_job(self, payload: dict, **_: Any):
         kind = payload.get("kind")

@@ -11,6 +11,8 @@ import threading
 from pathlib import Path
 
 import crypto_data
+import swing
+import trade_desk
 from data_sync import refresh_current
 from decision_pipeline import DailyCoordinator, read_json
 from market_router import route_all
@@ -73,6 +75,12 @@ class MarketService:
                 )
                 result["india"] = {"status": report["status"], "run_id": report["run_id"]}
                 result["autopilot"] = autopilot.apply(self.coordinator, report)
+                settings = getattr(self.coordinator, "config", None) or {}
+                project = getattr(self.coordinator, "config_path", None) is not None
+                if project and settings.get("trade_desk", {}).get("enabled", True):
+                    result["desk"] = self.desk_tick()
+                if project and settings.get("swing", {}).get("enabled", True):
+                    result["swing"] = self.swing_tick()
             except (ValueError, OSError, KeyError, TypeError, sqlite3.Error):
                 result["india"] = {"status": "DATA_BLOCK", "reason": "Research run unavailable"}
         for symbol in self.symbols:
@@ -96,6 +104,21 @@ class MarketService:
         with sqlite3.connect(self.path) as conn:
             conn.execute("INSERT OR REPLACE INTO state VALUES (1,?)", (json.dumps(result),))
         return result
+
+    def desk_tick(self) -> dict:
+        """Entry timer, exit plan, time machine, trade check and alerts for today's picks."""
+        try:
+            summary = trade_desk.tick(self.coordinator)
+        except (ValueError, OSError, KeyError, TypeError, sqlite3.Error) as exc:
+            return {"status": "DATA_BLOCK", "reason": str(exc)[:200]}
+        return {key: summary.get(key) for key in ("status", "triggers", "alerts")}
+
+    def swing_tick(self) -> dict:
+        """Swing desk: enter once after the open, then stops, targets and time exits."""
+        try:
+            return swing.tick(self.coordinator.config_path)
+        except (ValueError, OSError, KeyError, TypeError, sqlite3.Error) as exc:
+            return {"status": "DATA_BLOCK", "reason": str(exc)[:200]}
 
     def prepare_inputs(self, now: dt.datetime) -> dict:
         """Refresh collected evidence and re-derive pre-trade checks for this cutoff.

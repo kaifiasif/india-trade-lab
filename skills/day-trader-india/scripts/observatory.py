@@ -112,6 +112,82 @@ def research_state(directory: Path) -> dict:
     return result
 
 
+def trade_desk_state(directory: Path) -> dict[str, Any] | None:
+    """The desk agent's cards for today's picks and the latest alerts, read only."""
+    folder = directory / "desk"
+    try:
+        summary = json.loads((folder / "today.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    cards = []
+    day_folder = folder / str(summary.get("date", ""))
+    for item in summary.get("cards") or []:
+        symbol = str(item.get("symbol", ""))
+        path = day_folder / f"{symbol.split(':')[-1]}.json"
+        try:
+            if path.stat().st_size > 2_000_000:
+                continue
+            card = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        entry, plan = card.get("entry") or {}, card.get("plan") or {}
+        odds, check = card.get("odds") or {}, card.get("check") or {}
+        mc = odds.get("mc") or {}
+        cards.append(
+            {
+                "symbol": symbol,
+                "entry": {key: entry.get(key) for key in ("status", "message", "time", "price")},
+                "plan": {
+                    key: plan.get(key)
+                    for key in ("entry", "stop", "target", "risk_per_share", "reward_risk")
+                }
+                if plan
+                else None,
+                "plan_refused": card.get("plan_refused"),
+                "odds": {
+                    **{
+                        key: mc.get(key)
+                        for key in (
+                            "target_first_pct", "stop_first_pct", "neither_pct", "green_pct",
+                            "average_r", "replays", "sessions", "seed", "fan",
+                        )
+                    },
+                    "after_costs": odds.get("average_r_after_costs"),
+                    "code": (odds.get("verdict") or {}).get("code"),
+                    "verdict": ((odds.get("verdict") or {}).get("lines") or [""])[0],
+                    "history": odds.get("history"),
+                }
+                if mc
+                else None,
+                "odds_unavailable": card.get("odds_unavailable"),
+                "check": {
+                    key: check.get(key)
+                    for key in (
+                        "verdict", "qty", "cost_inr", "planned_loss_inr", "decided_by", "blocks",
+                    )
+                }
+                if check
+                else None,
+                "check_unavailable": card.get("check_unavailable"),
+            }
+        )  # fmt: skip
+    alerts = []
+    try:
+        lines = (folder / "alerts-log.jsonl").read_text(encoding="utf-8").splitlines()[-8:]
+        for line in reversed(lines):
+            item = json.loads(line)
+            alerts.append({key: item.get(key) for key in ("at", "type", "message")})
+    except (OSError, ValueError):
+        alerts = []
+    return {
+        "date": summary.get("date"),
+        "checked_at": summary.get("checked_at"),
+        "status": summary.get("status"),
+        "cards": cards,
+        "alerts": alerts,
+    }
+
+
 def desk_state(directory: Path) -> dict[str, Any]:
     """Today's desk: the latest pre-market selection and the strategy scorecard, read only."""
     result: dict[str, Any] = {"report": None, "scorecard": None}
@@ -160,9 +236,54 @@ def desk_state(directory: Path) -> dict[str, Any]:
                 "strategies": list((selection.get("strategies") or {}).keys()),
                 "assessed": len(report.get("candidates") or []),
                 "pool": len(selection.get("pool") or []),
+                "scan": report.get("scan"),
+                "ranked": [
+                    {
+                        "symbol": item.get("symbol"),
+                        "score": (item.get("score") or {}).get("total"),
+                        "eligible": item.get("eligible"),
+                        "watch": item.get("symbol") in (report.get("watching") or []),
+                        "buildup": ((item.get("signals") or {}).get("positioning") or {}).get(
+                            "buildup"
+                        ),
+                        "delivery_pct": ((item.get("signals") or {}).get("positioning") or {}).get(
+                            "delivery_pct"
+                        ),
+                        "gap_pct": ((item.get("signals") or {}).get("opening") or {}).get(
+                            "gap_pct"
+                        ),
+                        "rs_pct": ((item.get("signals") or {}).get("opening") or {}).get(
+                            "rs_vs_nifty_pct"
+                        ),
+                        "events": (item.get("signals") or {}).get("events") or [],
+                        "setups": (item.get("signals") or {}).get("setups") or [],
+                        "insiders": (item.get("signals") or {}).get("insiders"),
+                        "results": (item.get("signals") or {}).get("results"),
+                    }
+                    for item in (report.get("candidates") or [])[:12]
+                    if item.get("signals")
+                ],
             }
+            try:
+                checked = json.loads(
+                    (directory / f"confirm-{report.get('session_date')}.json").read_text("utf-8")
+                )
+                result["report"]["confirmation"] = checked.get("picks")
+            except (OSError, ValueError):
+                result["report"]["confirmation"] = None
     except (OSError, ValueError, TypeError, AttributeError):
         result["report"] = None
+    result["trade_desk"] = trade_desk_state(directory)
+    try:
+        import swing
+
+        result["swing"] = (
+            swing.status(directory / "pipeline.json")
+            if (directory / "pipeline.json").is_file()
+            else None
+        )
+    except (ValueError, OSError, KeyError, TypeError):
+        result["swing"] = None
     try:
         card = json.loads((directory / "strategy-scorecard.json").read_text(encoding="utf-8"))
         result["scorecard"] = {

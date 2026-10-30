@@ -35,8 +35,8 @@ def refresh_current(
     root = config_path.resolve().parent
     india_research.session(read_json(root / config["sessions"]), clock.date())
     instruments = read_json(root / config["universe"])["instruments"]
-    if not 1 <= len(instruments) <= 3:
-        raise ValueError("Current feed is limited to 1–3 explicitly mapped instruments")
+    if not 1 <= len(instruments) <= 10:
+        raise ValueError("Current feed is limited to 1–10 explicitly mapped instruments")
     fetch = fetch or fetch_history
     rows, quotes, blocked = [], {}, []
     exports = root / "provider-exports"

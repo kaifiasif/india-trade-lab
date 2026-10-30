@@ -32,7 +32,7 @@ operations and supply their actual outputs; never invent a successful run.
 2. Calculate whole-share quantities with Decimal amounts. Respect planned loss including adverse slippage and round-trip charges, entry cost/position cap, cash after entry fees and exit-fee reserve, cash buffer, aggregate risk and remaining daily limits.
 3. Round the candidate quantity down and recompute the complete costs at that quantity; include minimum or nonlinear charges. Require a positive feasible quantity and a stop below the long entry. Do not size from a historical confirmation price as though it were a current quote.
 4. Show the binding constraint, estimated entry cost, exit reserve, planned loss and remaining virtual cash. State that gap losses may exceed planned stop loss and that no formula guarantees funds or profit.
-5. Return only a proposed virtual quantity to `india-risk` and `india-reviewer`. Treat this sizing routine as guided analysis, not an implemented standalone budget CLI; never loosen limits, reduce cost assumptions or edit the book to force a fit.
+5. Return only a proposed virtual quantity to `india-risk` and `india-reviewer`. Prefer the core `trade_check.py`, which sizes a plan against the paper book's own limits and names the binding one; never loosen limits, reduce cost assumptions or edit the book to force a fit.
 
 ## Emit the handoff
 

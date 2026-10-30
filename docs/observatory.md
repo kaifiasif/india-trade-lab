@@ -15,10 +15,11 @@ Python backend ship together in the portable `day-trader-india` skill.
 | Page | What it shows or does |
 | --- | --- |
 | Today | Greeting, setup progress, the paper book, today's picks, the IST session timeline and the strategy tournament |
-| Pre-market desk | The judge's picks and drops, each specialist's one-line view, and buttons to run news, the report (with or without email) and the tournament |
+| Pre-market desk | The judge's picks and drops, each specialist's one-line view, today's scan (how many F&O stocks were scanned and why they were dropped, positioning, pre-open strength and the 09:31 check for each ranked stock), and buttons to run every stage |
 | Paper replay | A synthetic NSE:DEMO session through the real engine: five pipeline stages, the price with fills, stop and target, paper calls and engine events, with pause and halt |
 | Research | Recorded research reviews, how past ratings settled, history coverage and the screened watchlist |
 | Agents | The sixteen-member desk and what each one is allowed to do |
+| Learning | Each agent's report card, recent lessons from mistakes, what the desk knows about each stock, model use per tier against your limits, and fine-tuning readiness |
 | Setup | Eleven steps from an empty server to a working desk (below) |
 | Settings | Every editable `pipeline.json` setting, in tabs, saved atomically with a backup |
 
@@ -31,7 +32,7 @@ reduced motion they hold still and every value is still shown.
 
 Setup walks through: the private project, your name and report address, Kite
 Connect keys, today's Kite login (open Zerodha, paste the address it returns
-to), email, the research model, choosing one to three stocks from NSE's
+to), email, the research model, choosing one to ten stocks from NSE's
 `EQUITY_L.csv`, loading history, the tournament, the paper book and today's
 surveillance and announcement checks. Long tasks run as server jobs with a live
 log; one job per kind runs at a time and a restart marks unfinished jobs as
