@@ -50,6 +50,32 @@ class AutopilotTests(unittest.TestCase):
             self.assertEqual(position["research_meta"]["execution_kind"], "paper_autopilot")
             self.assertEqual(book["mode"], "paper_manual")
 
+    def test_the_time_machine_can_veto_and_recorded_entries_get_alerts(self):
+        from unittest.mock import patch
+
+        import price_alerts
+        import time_machine
+
+        with tempfile.TemporaryDirectory() as temporary:
+            coordinator, now = setup(Path(temporary))
+            enabled(coordinator)
+            picks(coordinator, now, ["NSE:TEST"])
+            report = coordinator.run_once()
+            with patch.object(
+                time_machine, "odds_gate", return_value="time machine: leans to the stop"
+            ):
+                vetoed = autopilot.apply(coordinator, report, now)
+            self.assertEqual(vetoed["recorded"], [])
+            self.assertIn("time machine", vetoed["skipped"][0]["reason"])
+            outcome = autopilot.apply(coordinator, report, now)
+            self.assertEqual([item["side"] for item in outcome["recorded"]], ["buy"], outcome)
+            rules = price_alerts.load(
+                price_alerts.rules_path(coordinator.config_path), {"rules": []}
+            )
+            self.assertEqual(
+                sorted(rule["type"] for rule in rules["rules"]), ["stop", "target", "time"]
+            )
+
     def test_entries_wait_for_the_judge_and_nothing_happens_when_off(self):
         with tempfile.TemporaryDirectory() as temporary:
             coordinator, now = setup(Path(temporary))

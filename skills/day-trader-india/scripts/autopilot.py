@@ -72,6 +72,33 @@ def opening_gate(coordinator: Any, symbol: str, clock: dt.datetime) -> str:
     return ""
 
 
+def alert_entry(coordinator: Any, symbol: str, ticket: dict, clock: dt.datetime) -> str:
+    """Set the stop, target and square-off alerts for a recorded paper entry."""
+    if not (getattr(coordinator, "config", {}).get("alerts") or {}).get("on_entries", True):
+        return "off"
+    import intraday
+    import price_alerts
+
+    try:
+        times = intraday.session_times(
+            intraday.sessions_manifest(coordinator.config_path), clock.date()
+        )
+        if times is None:
+            return "no session"
+        trade = {
+            "symbol": symbol, "date": str(clock.date()), "stop": float(ticket["stop_inr"]),
+            "target": float(ticket["target_inr"]), "flat_by": times["flat_by"].isoformat(),
+        }  # fmt: skip
+        path = price_alerts.rules_path(coordinator.config_path)
+        rules = price_alerts.add(
+            price_alerts.load(path, {"rules": []}), price_alerts.from_plan(trade)
+        )
+        intraday.write_json(path, rules)
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        return f"not set ({str(exc)[:80]})"
+    return "stop, target and square-off"
+
+
 def apply(coordinator: Any, report: dict, now: dt.datetime | None = None) -> dict[str, Any]:
     """Record approved paper exits and the selected entry from one coordinator report."""
     settings = getattr(coordinator, "config", {}).get("autopilot") or {}
@@ -117,6 +144,13 @@ def apply(coordinator: Any, report: dict, now: dt.datetime | None = None) -> dic
             gate = opening_gate(coordinator, symbol, clock)
             if gate:
                 outcome["skipped"].append({"symbol": symbol, "reason": gate})
+                continue
+        if decision == "BUY_PAPER_PROPOSAL":
+            import time_machine
+
+            veto = time_machine.odds_gate(coordinator, symbol, ticket, clock)
+            if veto:
+                outcome["skipped"].append({"symbol": symbol, "reason": veto})
                 continue
         try:
             with sqlite3.connect(book_path, isolation_level=None, timeout=10) as conn:
@@ -187,6 +221,7 @@ def apply(coordinator: Any, report: dict, now: dt.datetime | None = None) -> dic
             }
             if decision == "BUY_PAPER_PROPOSAL":
                 entry.update(stop_inr=ticket["stop_inr"], target_inr=ticket["target_inr"])
+                entry["alerts"] = alert_entry(coordinator, symbol, ticket, clock)
             outcome["recorded"].append(entry)
         except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             outcome["skipped"].append(

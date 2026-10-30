@@ -67,6 +67,21 @@ KINDS: dict[str, dict[str, Any]] = {
         "argv": ["trade_desk.py", "--once"],
         "timeout": 300,
     },
+    "swing_tournament": {
+        "label": "Swing tournament (which setups are proven)",
+        "argv": ["swing.py", "tournament"],
+        "timeout": 900,
+    },
+    "swing_scan": {
+        "label": "Swing scan for the next session",
+        "argv": ["swing.py", "scan"],
+        "timeout": 300,
+    },
+    "swing_tick": {
+        "label": "Swing desk: enter and manage now",
+        "argv": ["swing.py", "tick"],
+        "timeout": 120,
+    },
     "insiders": {
         "label": "Insider-trading filings, last 7 days",
         "argv": ["insider_tracker.py", "recent", "--days", "7", "--insiders-only"],
@@ -83,7 +98,13 @@ KINDS: dict[str, dict[str, Any]] = {
         "timeout": 600,
     },
 }
-SUBCOMMAND_SCRIPTS = ("learning.py", "market_scan.py", "insider_tracker.py", "price_alerts.py")
+SUBCOMMAND_SCRIPTS = (
+    "learning.py",
+    "market_scan.py",
+    "insider_tracker.py",
+    "price_alerts.py",
+    "swing.py",
+)
 STATES = ("running", "succeeded", "failed", "timed_out", "interrupted")
 
 

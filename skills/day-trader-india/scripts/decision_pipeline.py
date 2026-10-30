@@ -116,6 +116,22 @@ OPTIONAL_CONFIG = {
     # The trade desk agent runs the Entry Timer, Exit Planner, Time Machine, trade check
     # and Price Alerts on every session tick, for each of today's picks.
     "trade_desk": {"enabled": True},
+    # Swing desk: up to 5-session holds on volume-confirmed daily setups, in its own paper
+    # book (swing.sqlite). Only setups proven by the swing tournament are entered.
+    "swing": {
+        "enabled": True,
+        "book": "swing.sqlite",
+        "max_hold_days": 5,
+        "max_new_per_day": 2,
+        "require_proven": True,
+        "min_vol_ratio": 2.0,
+        "max_gap_up_pct": 3.0,
+        "event_window_days": 7,
+        "target_r": 2.0,
+        "fee_bps": 12.0,
+        "fee_flat_inr": 20.0,
+        "slippage_bps": 5.0,
+    },
     # Time Machine gate (downgrade only): skip autopilot entries whose replays lean
     # toward the stop. Without 20 stored sessions the gate lets the entry through,
     # unless require_history is true.
@@ -146,7 +162,7 @@ OPTIONAL_CONFIG = {
 }
 NESTED_DEFAULTS = (
     "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
-    "openrouter", "trade_desk", "timemachine", "alerts",
+    "openrouter", "trade_desk", "timemachine", "alerts", "swing",
 )  # fmt: skip
 
 DEFAULT_CONFIG = {
@@ -397,6 +413,40 @@ class DailyCoordinator:
             raise ValueError(
                 "timemachine needs true/false switches and 500-50,000 replays; alerts and "
                 "trade_desk take true/false"
+            )
+        swing = cfg["swing"]
+        if (
+            any(type(swing[key]) is not bool for key in ("enabled", "require_proven"))
+            or not isinstance(swing["book"], str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,40}\.sqlite", swing["book"])
+            or swing["book"] == cfg["book"]
+            or type(swing["max_hold_days"]) is not int
+            or not 1 <= swing["max_hold_days"] <= 20
+            or type(swing["max_new_per_day"]) is not int
+            or not 1 <= swing["max_new_per_day"] <= 3
+            or type(swing["event_window_days"]) is not int
+            or not 1 <= swing["event_window_days"] <= 20
+            or any(
+                not isinstance(swing[key], (int, float)) or isinstance(swing[key], bool)
+                for key in (
+                    "min_vol_ratio",
+                    "max_gap_up_pct",
+                    "target_r",
+                    "fee_bps",
+                    "fee_flat_inr",
+                    "slippage_bps",
+                )
+            )  # fmt: skip
+            or not 1 <= swing["min_vol_ratio"] <= 10
+            or not 0 < swing["max_gap_up_pct"] <= 10
+            or not 1 <= swing["target_r"] <= 5
+            or not 0 <= swing["fee_bps"] <= 100
+            or not 0 <= swing["fee_flat_inr"] <= 500
+            or not 0 <= swing["slippage_bps"] <= 100
+        ):
+            raise ValueError(
+                "swing needs a separate .sqlite book, 1-20 hold days, 1-3 new trades a day, a "
+                "1-20 day event window, volume ratio 1-10, gap 0-10%, target 1-5R and sane costs"
             )
         router_caps = cfg["openrouter"]
         if (

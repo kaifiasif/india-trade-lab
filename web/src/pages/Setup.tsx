@@ -626,47 +626,81 @@ function TournamentStep() {
   );
 }
 
-function BookStep() {
+type BookValues = { cash_inr: string; risk_inr: string; daily_loss_inr: string; position_limit_inr: string };
+
+function BookForm({ action, title, note, defaults, exists, needsStocks }: { action: string; title: string; note: string; defaults: BookValues; exists: boolean; needsStocks: boolean }) {
   const { setup: status, refreshSetup, refreshState } = useData();
-  const [values, setValues] = useState({ cash_inr: "200000", risk_inr: "500", daily_loss_inr: "1500", position_limit_inr: "30000" });
+  const [values, setValues] = useState<BookValues>(defaults);
   const { busy, run } = useBusy();
-  if (status?.book) return <Done>Your paper book exists. It is never overwritten; its journal is sealed with a checksum.</Done>;
-  const fields: [keyof typeof values, string, string][] = [
+  const fields: [keyof BookValues, string, string][] = [
     ["cash_inr", "Virtual cash", "Pretend money; no real funds move."],
     ["risk_inr", "Risk per trade", "Loss if a stop is hit, before costs."],
-    ["daily_loss_inr", "Daily loss limit", "The desk stops for the day after this."],
+    ["daily_loss_inr", "Daily loss limit", "No new entries once losses and open risk reach this."],
     ["position_limit_inr", "Largest position", "Most rupees in one stock."],
   ];
+  const id = (key: string) => `${action}-${key}`;
   return (
-    <form
-      className="grid max-w-lg gap-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        run("book", async () => {
-          try {
-            await setup("create_book", values);
-            await Promise.all([refreshSetup(), refreshState()]);
-            toast.success("Paper book created", `${rupees(values.cash_inr)} of virtual cash.`);
-          } catch (error) {
-            toast.error("Book not created", explain(error));
-          }
-        });
-      }}
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        {fields.map(([key, label, hint]) => (
-          <Field key={key} label={label} htmlFor={key} hint={hint}>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
-              <Input id={key} inputMode="decimal" className="num pl-7" value={values[key]} onChange={(event) => setValues({ ...values, [key]: event.target.value.replace(/[^0-9.]/g, "") })} />
-            </div>
-          </Field>
-        ))}
-      </div>
-      <Button type="submit" className="w-fit" disabled={busy !== null || !status?.universe?.symbols?.length}>
-        {busy && <Loader2 className="animate-spin" />} Create paper book
-      </Button>
-    </form>
+    <section className="grid gap-3" aria-labelledby={`${action}-title`}>
+      <h3 id={`${action}-title`} className="font-semibold">{title}</h3>
+      <p className="-mt-2 text-sm text-muted-foreground">{note}</p>
+      {exists ? (
+        <Done>This book exists. It is never overwritten; its journal is sealed with a checksum.</Done>
+      ) : (
+        <form
+          className="grid max-w-lg gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            run(action, async () => {
+              try {
+                await setup(action, values);
+                await Promise.all([refreshSetup(), refreshState()]);
+                toast.success(`${title} created`, `${rupees(values.cash_inr)} of virtual cash.`);
+              } catch (error) {
+                toast.error("Book not created", explain(error));
+              }
+            });
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            {fields.map(([key, label, hint]) => (
+              <Field key={key} label={label} htmlFor={id(key)} hint={hint}>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+                  <Input id={id(key)} inputMode="decimal" className="num pl-7" value={values[key]} onChange={(event) => setValues({ ...values, [key]: event.target.value.replace(/[^0-9.]/g, "") })} />
+                </div>
+              </Field>
+            ))}
+          </div>
+          <Button type="submit" className="w-fit" disabled={busy !== null || !status?.config_exists || (needsStocks && !status?.universe?.symbols?.length)}>
+            {busy && <Loader2 className="animate-spin" />} Create {title.toLowerCase()}
+          </Button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+function BookStep() {
+  const { setup: status } = useData();
+  return (
+    <div className="grid gap-8">
+      <BookForm
+        action="create_book"
+        title="Intraday book"
+        note="₹1 lakh for day trades: everything is squared off by 15:15."
+        defaults={{ cash_inr: "100000", risk_inr: "250", daily_loss_inr: "750", position_limit_inr: "15000" }}
+        exists={Boolean(status?.book)}
+        needsStocks
+      />
+      <BookForm
+        action="create_swing_book"
+        title="Swing book"
+        note="₹1 lakh for swing trades held up to 5 sessions. At most three open, two new a day. Overnight gaps can cost more than the stop."
+        defaults={{ cash_inr: "100000", risk_inr: "500", daily_loss_inr: "1500", position_limit_inr: "25000" }}
+        exists={Boolean(status?.swing_book)}
+        needsStocks={false}
+      />
+    </div>
   );
 }
 

@@ -275,6 +275,16 @@ def desk_state(directory: Path) -> dict[str, Any]:
         result["report"] = None
     result["trade_desk"] = trade_desk_state(directory)
     try:
+        import swing
+
+        result["swing"] = (
+            swing.status(directory / "pipeline.json")
+            if (directory / "pipeline.json").is_file()
+            else None
+        )
+    except (ValueError, OSError, KeyError, TypeError):
+        result["swing"] = None
+    try:
         card = json.loads((directory / "strategy-scorecard.json").read_text(encoding="utf-8"))
         result["scorecard"] = {
             "as_of": card.get("as_of"),

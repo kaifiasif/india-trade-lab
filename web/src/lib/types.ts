@@ -84,6 +84,7 @@ export interface DeskState {
     confirmation?: Record<string, { confirmed: boolean; rvol: number | null; above_vwap: boolean; rs_since_open_pct: number | null; reasons: string[] }> | null;
   } | null;
   trade_desk?: TradeDesk | null;
+  swing?: SwingDesk | null;
   scorecard: {
     as_of: string;
     sessions?: number;
@@ -149,6 +150,7 @@ export interface SetupStatus {
   tournament: { ran: boolean; as_of?: string; eligible: string[] };
   attested_today: Record<string, { attested_at: string }>;
   book: boolean;
+  swing_book?: boolean;
   jobs: Job[];
   job_kinds: Record<string, string>;
   steps: { id: string; label: string; done: boolean; detail: string }[];
@@ -241,4 +243,40 @@ export interface TradeDesk {
   status: string;
   cards: DeskCard[];
   alerts: { at: string; type: string; message: string }[];
+}
+
+export interface SwingCandidate {
+  symbol: string;
+  strategy: string;
+  date: string;
+  close: number;
+  stop: number;
+  target: number;
+  risk_pct: number;
+  vol_ratio?: number | null;
+  obv_rising?: boolean | null;
+  proven: boolean;
+  reason: string;
+}
+
+export interface SwingDesk {
+  candidates: {
+    date: string;
+    scanned: number;
+    candidates: SwingCandidate[];
+    skipped_for_events: Record<string, string>;
+    events_checked: boolean;
+    proven: string[];
+    notes: string[];
+  } | null;
+  positions: { symbol: string; qty: number; entry: string; stop: number | string; rule: string; target?: string | null; entered: string; strategy?: string | null; sessions_held: number }[];
+  closed: { symbol: string; at: string; price: string; net_inr?: string | null }[];
+  book: { cash: string; initial_cash: string; limits: Record<string, string>; open: number } | null;
+  scorecard: {
+    as_of: string;
+    sessions: number;
+    stocks: number;
+    eligible: string[];
+    strategies: Record<string, { eligible: boolean; reason: string; trades: number; net_inr: number; profit_factor: number | null; win_rate_pct: number | null }>;
+  } | null;
 }

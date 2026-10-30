@@ -76,6 +76,11 @@ case "$job" in
     fi
     python3 scripts/market_scan.py --config "$CONFIG" nightly \
       || echo "Daily candles for the scan were not refreshed; the morning scan will fetch them."
+    # Swing desk: re-prove its setups on today's candles, then pick tomorrow's candidates.
+    python3 scripts/swing.py --config "$CONFIG" tournament \
+      || echo "Swing tournament did not run; yesterday's scorecard stays."
+    python3 scripts/swing.py --config "$CONFIG" scan \
+      || echo "Swing scan did not run; the swing desk will not enter tomorrow."
     python3 scripts/tournament.py --config "$CONFIG" \
       || echo "Tournament failed; yesterday's scorecard stays until it expires."
     # Grade every agent's calls on today's completed session and paper trades, and

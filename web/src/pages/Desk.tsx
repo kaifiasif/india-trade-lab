@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, Td, Th } from "@/components/ui/misc";
 import { JobRunner } from "@/components/setup-kit";
 import { TradeDeskCard } from "@/components/TradeDeskCard";
+import { SwingCard } from "@/components/SwingCard";
 import { Mascot } from "@/mascots/Mascot";
 import type { MascotKey } from "@/mascots/data";
 
@@ -151,6 +152,8 @@ export function DeskPage() {
       {desk?.scan && <ScanCard desk={desk} />}
 
       <TradeDeskCard desk={state?.desk?.trade_desk} />
+
+      <SwingCard swing={state?.desk?.swing} />
 
       <Card>
         <CardHeader>

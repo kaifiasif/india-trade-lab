@@ -48,13 +48,15 @@ class DeskTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             self.assertEqual(
-                desk_state(directory), {"report": None, "scorecard": None, "trade_desk": None}
+                desk_state(directory),
+                {"report": None, "scorecard": None, "trade_desk": None, "swing": None},
             )
             (directory / "reports").mkdir()
             (directory / "reports" / "premarket-2026-10-26.json").write_text("{broken")
             (directory / "strategy-scorecard.json").write_text("[]")
             self.assertEqual(
-                desk_state(directory), {"report": None, "scorecard": None, "trade_desk": None}
+                desk_state(directory),
+                {"report": None, "scorecard": None, "trade_desk": None, "swing": None},
             )
 
 

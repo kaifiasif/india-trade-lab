@@ -233,6 +233,14 @@ the stock's stored sessions, plus the same rule on past sessions), `trade_check.
 `trade_desk.py` runs them for each pick on every session-worker tick; the time
 machine can veto an autopilot entry. Read [trade-tools.md](references/trade-tools.md).
 
+## Swing desk
+
+`scripts/swing.py` holds trades for up to five sessions, in its own paper book.
+It takes only volume-confirmed daily setups (a breakout on 2x volume, a pocket
+pivot, a pullback on drying volume) that its own tournament proved at double
+delivery costs. It enters after the open and exits at the stop, a trailing stop,
+the target or day five. Read [swing.md](references/swing.md).
+
 ## Learning from mistakes and model routing
 
 `scripts/learning.py settle` grades every agent's calls each evening against the

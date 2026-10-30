@@ -298,6 +298,7 @@ class SetupApi:
             "tournament": tournament,
             "attested_today": attested,
             "book": (self.data_dir / "paper.sqlite").is_file(),
+            "swing_book": (self.data_dir / "swing.sqlite").is_file(),
             "jobs": self.jobs.recent(),
             "job_kinds": {kind: spec["label"] for kind, spec in job_runner.KINDS.items()},
             "steps": [
@@ -646,11 +647,11 @@ class SetupApi:
             raise ApiError(409, "stocks_required", "Choose your stocks first")
         try:
             book = paper_book.create(
-                str(payload.get("cash_inr", "200000")),
+                str(payload.get("cash_inr", "100000")),
                 ",".join(symbols),
-                str(payload.get("risk_inr", "500")),
-                str(payload.get("daily_loss_inr", "1500")),
-                str(payload.get("position_limit_inr", "30000")),
+                str(payload.get("risk_inr", "250")),
+                str(payload.get("daily_loss_inr", "750")),
+                str(payload.get("position_limit_inr", "15000")),
             )
         except (ValueError, ArithmeticError) as error:
             raise ApiError(422, "invalid", str(error)) from None
@@ -660,6 +661,23 @@ class SetupApi:
             )
             conn.execute("INSERT INTO book VALUES (1, ?)", (json.dumps(book),))
         return {"ok": True, "cash": book["cash"], "symbols": symbols}, {}, ["paper.sqlite"]
+
+    def do_create_swing_book(self, payload: dict, **_: Any):
+        import swing
+
+        self._require_project()
+        try:
+            book = swing.create_book(
+                self.config,
+                str(payload.get("cash_inr", "100000")),
+                str(payload.get("risk_inr", "500")),
+                str(payload.get("daily_loss_inr", "1500")),
+                str(payload.get("position_limit_inr", "25000")),
+            )
+        except (ValueError, ArithmeticError) as error:
+            code = 409 if "already exists" in str(error) else 422
+            raise ApiError(code, "invalid", str(error)) from None
+        return {"ok": True, "cash": book["cash"]}, {}, [swing.settings(self.config)["book"]]
 
     def do_run_job(self, payload: dict, **_: Any):
         kind = payload.get("kind")
