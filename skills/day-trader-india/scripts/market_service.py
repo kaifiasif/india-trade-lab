@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 
 import crypto_data
+import safety
 import swing
 import trade_desk
 from data_sync import refresh_current
@@ -35,6 +36,7 @@ class MarketService:
         collect=crypto_data.collect,
         refresh_india: bool = False,
         prepare: bool = False,
+        quotes=None,
     ) -> None:
         if len(symbols) > 5 or len(set(symbols)) != len(symbols):
             raise ValueError("Use at most five distinct crypto spot pairs")
@@ -47,6 +49,8 @@ class MarketService:
         self.collect = collect
         self.refresh_india = refresh_india
         self.prepare = prepare
+        self.recovered = False  # Recovery runs once, on the first tick after a (re)start.
+        self.quotes = quotes or safety.kite_quotes
         with sqlite3.connect(self.path) as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY, data TEXT)")
             conn.execute("CREATE TABLE IF NOT EXISTS collected (symbol TEXT PRIMARY KEY, at REAL)")
@@ -77,6 +81,8 @@ class MarketService:
                 result["autopilot"] = autopilot.apply(self.coordinator, report)
                 settings = getattr(self.coordinator, "config", None) or {}
                 project = getattr(self.coordinator, "config_path", None) is not None
+                if project:
+                    result["safety"] = self.safety_tick(now)
                 if project and settings.get("trade_desk", {}).get("enabled", True):
                     result["desk"] = self.desk_tick()
                 if project and settings.get("swing", {}).get("enabled", True):
@@ -104,6 +110,30 @@ class MarketService:
         with sqlite3.connect(self.path) as conn:
             conn.execute("INSERT OR REPLACE INTO state VALUES (1,?)", (json.dumps(result),))
         return result
+
+    def safety_tick(self, now: dt.datetime) -> dict:
+        """Market conditions for the entry guard, and the square-off, every tick."""
+        clock = now.astimezone(safety.intraday.IST)
+        path = self.coordinator.config_path
+        outcome: dict = {}
+        if not self.recovered:
+            self.recovered = True
+            try:
+                outcome["recovery"] = safety.recover(path, clock, self.quotes)
+            except (ValueError, OSError, KeyError, sqlite3.Error) as exc:
+                outcome["recovery"] = {"status": "DATA_BLOCK", "reason": str(exc)[:200]}
+        try:
+            outcome["conditions"] = safety.refresh_conditions(path, clock, self.quotes)
+        except (ValueError, OSError, KeyError) as exc:
+            outcome["conditions"] = {
+                "status": "unavailable; entries wait",
+                "reason": str(exc)[:160],
+            }
+        try:
+            outcome["square_off"] = safety.square_off(path, clock, self.quotes)
+        except (ValueError, OSError, KeyError, sqlite3.Error) as exc:
+            outcome["square_off"] = {"status": "DATA_BLOCK", "reason": str(exc)[:200]}
+        return outcome
 
     def desk_tick(self) -> dict:
         """Entry timer, exit plan, time machine, trade check and alerts for today's picks."""

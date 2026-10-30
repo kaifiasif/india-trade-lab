@@ -257,6 +257,37 @@ export interface SwingCandidate {
   obv_rising?: boolean | null;
   proven: boolean;
   reason: string;
+  odds?: SwingOdds | { unavailable: string } | null;
+}
+
+export interface SwingOdds {
+  symbol?: string;
+  entry?: number;
+  stop?: number;
+  target?: number;
+  replays: number;
+  seed: number;
+  days_in_pool: number;
+  hold_days: number;
+  qty: number;
+  exits_pct: Record<string, number>;
+  target_pct: number;
+  stopped_pct: number;
+  time_exit_pct: number;
+  by_day: { day: number; target_pct: number; stopped_pct: number }[];
+  expected_pnl_inr: number;
+  median_pnl_inr: number;
+  p5_pnl_inr: number;
+  p25_pnl_inr: number;
+  p75_pnl_inr: number;
+  p95_pnl_inr: number;
+  worst_5pct_avg_inr: number;
+  worst_inr: number;
+  profit_pct: number;
+  average_r: number;
+  planned_loss_inr: number;
+  histogram: { from_inr: number; width_inr: number; counts: number[] };
+  summary: string;
 }
 
 export interface SwingDesk {

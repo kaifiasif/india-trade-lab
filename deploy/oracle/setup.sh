@@ -120,7 +120,9 @@ unit india-trade-lab-market.timer <<'UNIT'
 Description=Start the research worker at 09:05 IST on weekdays (stops itself by 15:50)
 [Timer]
 OnCalendar=Mon..Fri *-*-* 09:05:00
-Persistent=false
+# After a reboot during market hours, start at once: the worker recovers open paper
+# positions and squares off anything overdue on its first tick.
+Persistent=true
 [Install]
 WantedBy=timers.target
 UNIT

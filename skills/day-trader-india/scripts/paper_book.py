@@ -53,6 +53,9 @@ def timestamp(value: str) -> dt.datetime:
     return t.astimezone(IST)
 
 
+MIN_NET_REWARD_RISK = Decimal("1")  # Forward entries: reward after costs at least the risk.
+
+
 def create(
     cash: Numeric,
     symbols: str,
@@ -256,6 +259,8 @@ def fill(
         stop, reserve = number(stop, True), number(exit_fee)
         if not stop < px:
             raise ValueError("Long stop must be below assumed entry")
+        if target is None and state["mode"] == "paper_manual":
+            raise ValueError("Record the target before entry, with the stop")
         if target is not None and number(target, True) <= px:
             raise ValueError("Long target must exceed the assumed entry")
         if research_meta is not None and (
@@ -279,6 +284,12 @@ def fill(
         assumed_stop = stop * (1 - slip / 10000)
         loss = (px - assumed_stop) * qty + fee + reserve
         cost = px * qty + fee
+        if target is not None and state["mode"] == "paper_manual":
+            reward = (number(target, True) * (1 - slip / 10000) - px) * qty - fee - reserve
+            if reward < loss * MIN_NET_REWARD_RISK:
+                raise ValueError(
+                    "Reward at the target after costs is below the loss at the stop; not worth it"
+                )
         existing_risk = sum((number(p["planned_loss_inr"]) for p in positions.values()), Decimal(0))
         realized = Decimal(state["realized_by_day"].get(day, "0"))
         daily_used = max(Decimal(0), -realized) + existing_risk

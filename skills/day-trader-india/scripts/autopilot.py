@@ -72,6 +72,30 @@ def opening_gate(coordinator: Any, symbol: str, clock: dt.datetime) -> str:
     return ""
 
 
+def safety_gate(coordinator: Any, symbol: str, ticket: dict, clock: dt.datetime) -> str:
+    """Desk-wide entry rules: market conditions, no duplicate across books, reward after costs."""
+    import safety
+
+    config = getattr(coordinator, "config", {}) or {}
+    rules = safety.settings(config)
+    path = getattr(coordinator, "config_path", None)
+    if path is not None:
+        blocked = safety.entry_guard(path, clock) or safety.held_elsewhere(path, symbol, "intraday")
+        if blocked:
+            return blocked
+    try:
+        ratio = safety.net_reward_risk(
+            float(ticket["price_inr"]), float(ticket["stop_inr"]), float(ticket["target_inr"]),
+            int(ticket["qty"]), float(config.get("fee_bps", 5)), float(config.get("fee_flat_inr", 10)),
+            float(config.get("slippage_bps", 5)),
+        )  # fmt: skip
+    except (KeyError, TypeError, ValueError):
+        return "the ticket lacks an entry, stop, target or quantity"
+    if ratio < float(rules["min_net_reward_risk"]):
+        return f"reward after costs is {ratio:.2f}x the risk; the desk needs {float(rules['min_net_reward_risk']):g}x"
+    return ""
+
+
 def alert_entry(coordinator: Any, symbol: str, ticket: dict, clock: dt.datetime) -> str:
     """Set the stop, target and square-off alerts for a recorded paper entry."""
     if not (getattr(coordinator, "config", {}).get("alerts") or {}).get("on_entries", True):
@@ -148,7 +172,9 @@ def apply(coordinator: Any, report: dict, now: dt.datetime | None = None) -> dic
         if decision == "BUY_PAPER_PROPOSAL":
             import time_machine
 
-            veto = time_machine.odds_gate(coordinator, symbol, ticket, clock)
+            veto = safety_gate(coordinator, symbol, ticket, clock) or time_machine.odds_gate(
+                coordinator, symbol, ticket, clock
+            )
             if veto:
                 outcome["skipped"].append({"symbol": symbol, "reason": veto})
                 continue

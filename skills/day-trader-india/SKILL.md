@@ -241,6 +241,13 @@ pivot, a pullback on drying volume) that its own tournament proved at double
 delivery costs. It enters after the open and exits at the stop, a trailing stop,
 the target or day five. Read [swing.md](references/swing.md).
 
+## Safety rules
+
+Both books share desk-wide rules that can only stop or close trades: a market
+guard (India VIX, Nifty move, unread conditions), no stock held in both books,
+stop and target before entry, reward after costs, automatic intraday square-off
+and recovery after a restart. Read [safety.md](references/safety.md).
+
 ## Learning from mistakes and model routing
 
 `scripts/learning.py settle` grades every agent's calls each evening against the

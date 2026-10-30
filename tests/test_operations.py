@@ -308,6 +308,7 @@ class PretradeTests(unittest.TestCase):
             book, "buy", "e1", "NSE:INFY", "1510.50",
             (self.now - dt.timedelta(seconds=20)).isoformat(), "kite:full_quote:408065",
             "13.60", "5", qty=9, stop="1498", exit_fee="13.49", now=self.now, evidence=item,
+            target="1540",
         )  # fmt: skip
         self.assertEqual(state["positions"]["NSE:INFY"]["qty"], 9)
 

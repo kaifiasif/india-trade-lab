@@ -31,6 +31,7 @@ class PaperBookTests(unittest.TestCase):
             qty=100,
             stop="98",
             exit_fee="10",
+            target="110",
         )
         kw.update(changes)
         return fill(**kw)

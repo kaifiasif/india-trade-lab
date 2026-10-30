@@ -129,11 +129,17 @@ class TournamentTests(unittest.TestCase):
             self.assertTrue((Path(temporary) / "swing-scorecard.json").is_file())
 
 
+def calm(folder: Path, at: dt.datetime) -> None:
+    (folder / "market-guard.json").write_text(json.dumps({"at": at.isoformat(), "blocks": []}))
+
+
 def project(folder: Path) -> Path:
     shutil.copy(SESSIONS, folder / "sessions.json")
     (folder / "pipeline.json").write_text(json.dumps({
         "sessions": "sessions.json", "book": "paper.sqlite", "min_turnover_inr": 0,
         "swing": {"require_proven": True},
+        # Mechanics tests: the 1.5x desk default is tested on its own below.
+        "safety": {"min_net_reward_risk": 1.0},
     }))  # fmt: skip
     return folder / "pipeline.json"
 
@@ -152,8 +158,8 @@ def store(folder: Path, data: dict[str, list[dict]]) -> None:
             )
 
 
-def quote(price: float, opened: float, low: float | None = None) -> dict:
-    return {"last_price": price, "ohlc": {"open": opened, "low": low or price * 0.99},
+def quote(price: float, opened: float, low: float | None = None, at: str = "") -> dict:
+    return {"last_price": price, "ohlc": {"open": opened, "low": low or price * 0.99}, "timestamp": at,
             "lower_circuit_limit": price * 0.8, "upper_circuit_limit": price * 1.2,
             "depth": {"buy": [{"price": round(price - 0.05, 2)}], "sell": [{"price": price}]}}  # fmt: skip
 
@@ -198,8 +204,11 @@ class DeskTests(unittest.TestCase):
         )
         morning = dt.datetime(2026, 10, 30, 9, 20, tzinfo=intraday.IST)
         price = round(close * 1.005, 2)
+        calm(self.folder, morning)
         result = swing.enter(
-            self.config, morning, lambda symbols: {"NSE:DEMO": quote(price, price)}
+            self.config,
+            morning,
+            lambda symbols: {"NSE:DEMO": quote(price, price, at="2026-10-30 09:19:50")},
         )
         self.assertEqual([row["symbol"] for row in result["entered"]], ["NSE:DEMO"], result)
         book = swing.read_book(self.config)
@@ -240,8 +249,9 @@ class DeskTests(unittest.TestCase):
         self.scan()
         swing.create_book(self.config, "100000", "500", "1500", "25000")
         price = round(self.signal_bar["close"] * 1.005, 2)
+        calm(self.folder, dt.datetime(2026, 10, 30, 9, 20, tzinfo=intraday.IST))
         swing.enter(self.config, dt.datetime(2026, 10, 30, 9, 20, tzinfo=intraday.IST),
-                    lambda s: {"NSE:DEMO": quote(price, price)})  # fmt: skip
+                    lambda s: {"NSE:DEMO": quote(price, price, at="2026-10-30 09:19:55")})  # fmt: skip
         state = json.loads((self.folder / "swing-state.json").read_text())["positions"]["NSE:DEMO"]
         risk = state["entry"] - state["initial_stop"]
         up = state["entry"] + 1.2 * risk
@@ -255,6 +265,22 @@ class DeskTests(unittest.TestCase):
             self.config, fifth, lambda s: {"NSE:DEMO": quote(up, price, low=up * 0.99)}
         )
         self.assertTrue(done["exited"][0]["why"].startswith("time exit"))
+
+    def test_reward_after_costs_below_the_desk_minimum_is_refused(self):
+        self.scan()
+        swing.create_book(self.config, "100000", "500", "1500", "25000")
+        settings = json.loads(self.config.read_text())
+        settings["safety"]["min_net_reward_risk"] = 1.5
+        self.config.write_text(json.dumps(settings))
+        morning = dt.datetime(2026, 10, 30, 9, 20, tzinfo=intraday.IST)
+        calm(self.folder, morning)
+        price = round(self.signal_bar["close"] * 1.005, 2)
+        result = swing.enter(
+            self.config,
+            morning,
+            lambda s: {"NSE:DEMO": quote(price, price, at="2026-10-30 09:19:50")},
+        )
+        self.assertIn("reward after costs", result["skipped"]["NSE:DEMO"])
 
     def test_no_entries_when_nothing_is_proven_or_events_unchecked(self):
         intraday.write_json(self.folder / "swing-scorecard.json", {"eligible": [], "as_of": "x"})
@@ -305,6 +331,30 @@ class WorkerTests(unittest.TestCase):
             desk.assert_called_once()
             swing_tick.assert_called_once()
             self.assertEqual(result["desk"]["triggers"], 1)
+
+    def test_the_worker_recovers_once_then_reads_conditions_and_squares_off_every_tick(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shutil.copy(SESSIONS, root / "sessions.json")
+            coordinator = SimpleNamespace(
+                path=lambda name: root / "sessions.json", config_path=root / "pipeline.json",
+                config={"trade_desk": {"enabled": False}, "swing": {"enabled": False}},
+                run_once=lambda allow_entries: {"status": "OK", "run_id": "r1"},
+            )  # fmt: skip
+            now = dt.datetime.fromisoformat("2026-10-30T10:00:00+05:30")
+            safety = market_service.safety
+            with (
+                patch.object(market_service.autopilot, "apply", return_value={"enabled": False}),
+                patch.object(safety, "recover", return_value={"books": {}}) as recover,
+                patch.object(safety, "refresh_conditions", return_value={"blocks": []}) as read,
+                patch.object(safety, "square_off", return_value={"status": "not yet"}) as close,
+            ):
+                worker = market_service.MarketService(root / "pipeline.json", coordinator=coordinator,
+                                                      now=lambda: now, quotes=lambda s: {})  # fmt: skip
+                worker.tick()
+                worker.tick()
+            self.assertEqual(recover.call_count, 1)
+            self.assertEqual((read.call_count, close.call_count), (2, 2))
 
 
 if __name__ == "__main__":

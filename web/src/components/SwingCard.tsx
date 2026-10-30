@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, Td, Th } from "@/components/ui/misc";
 import { JobRunner } from "@/components/setup-kit";
+import { SwingSimulator, inr, isOdds } from "@/components/SwingSimulator";
 
 const SETUP: Record<string, string> = {
   "vol-breakout-v1": "Volume breakout",
@@ -113,6 +114,14 @@ export function SwingCard({ swing }: { swing: SwingDesk | null | undefined }) {
                   </p>
                   <p className="text-muted-foreground">{row.reason}</p>
                   <p className="num text-xs">Close {rupee(row.close)} · stop {rupee(row.stop)} ({row.risk_pct}%) · target {rupee(row.target)}</p>
+                  {isOdds(row.odds) ? (
+                    <p className="num text-xs">
+                      Simulated: <span className={row.odds.expected_pnl_inr >= 0 ? "text-success" : "text-destructive"}>{inr(row.odds.expected_pnl_inr)} expected</span> ·{" "}
+                      {row.odds.target_pct}% target · {row.odds.stopped_pct}% stopped · 1 in 20 worse than {inr(row.odds.p5_pnl_inr)}
+                    </p>
+                  ) : (
+                    row.odds && "unavailable" in row.odds && <p className="text-xs text-muted-foreground">Simulation: {row.odds.unavailable}</p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -124,6 +133,8 @@ export function SwingCard({ swing }: { swing: SwingDesk | null | undefined }) {
             <p className="text-xs text-muted-foreground">Skipped for results or meetings in the holding period: {Object.keys(picks.skipped_for_events).map((s) => s.replace("NSE:", "")).join(", ")}</p>
           )}
         </section>
+
+        <SwingSimulator candidates={picks?.candidates ?? []} />
 
         <div className="grid gap-3">
           <JobRunner kind="swing_tournament" label="Swing tournament" description="Replays each setup on the stored daily candles at double costs. Runs after the close." />

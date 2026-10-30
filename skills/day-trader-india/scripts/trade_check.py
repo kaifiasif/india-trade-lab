@@ -104,6 +104,10 @@ def size(plan: dict, book: dict, config: dict, entry: float, day: str) -> dict[s
     }
 
 
+def sized_preview(plan: dict, book: dict, config: dict, entry: float, day: str) -> int:
+    return int(size(plan, book, config, entry, day)["qty"])
+
+
 def review(
     plan: dict,
     book: dict,
@@ -172,6 +176,19 @@ def review(
             blocks.append(f"reward:risk {reward_risk:.2f} is under the minimum {minimum:g}")
         elif reward_risk < 2:
             warnings.append(f"reward:risk is {reward_risk:.2f}; the desk's strategies use 2R")
+    if stop < entry < target and sized_preview(plan, book, config, entry, day) > 0:
+        import safety
+
+        ratio = safety.net_reward_risk(
+            entry, stop, target, sized_preview(plan, book, config, entry, day),
+            float(config.get("fee_bps", 5)), float(config.get("fee_flat_inr", 10)),
+            float(config.get("slippage_bps", 5)),
+        )  # fmt: skip
+        minimum = float(safety.settings(config)["min_net_reward_risk"])
+        if ratio < minimum:
+            blocks.append(
+                f"reward after costs is {ratio:.2f}x the risk; the desk needs {minimum:g}x"
+            )
     if cooldowns and symbol in cooldowns:
         blocks.append(f"{symbol} is on a learning cooldown: {cooldowns[symbol]}")
     sized = size(plan, book, config, entry, day) if stop < entry else {"qty": 0}
@@ -246,6 +263,13 @@ def main(argv: list[str] | None = None) -> int:
             plan, book, config, clock, times, args.price, seen,
             _cooldowns(args.config, config, clock),
         )  # fmt: skip
+        import safety
+
+        for extra in (safety.entry_guard(args.config, clock),
+                      safety.held_elsewhere(args.config, plan["symbol"], "intraday")):  # fmt: skip
+            if extra:
+                result["blocks"].append(extra)
+                result["verdict"] = "BLOCK"
     except (ValueError, OSError, KeyError, sqlite3.Error) as exc:
         print(f"Trade check refused: {exc}", file=sys.stderr)
         return 2

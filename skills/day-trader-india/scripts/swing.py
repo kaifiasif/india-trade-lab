@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 import intraday
+import safety
 
 DEFAULT_CONFIG = Path("data/observatory/pipeline.json")
 IST = intraday.IST
@@ -70,6 +71,8 @@ DEFAULTS: dict[str, Any] = {
     "fee_bps": 12.0,
     "fee_flat_inr": 20.0,
     "slippage_bps": 5.0,
+    "require_positive_odds": True,  # Skip an entry the swing simulation expects to lose on.
+    "odds_replays": 2000,
 }
 TOURNAMENT_SIZING = {"risk_inr": 500.0, "position_cap_inr": 25_000.0}
 MIN_BARS = 60
@@ -454,7 +457,7 @@ def _state(config_path: Path) -> dict:
 
 
 def _save_state(config_path: Path, state: dict) -> None:
-    intraday.write_json(intraday.config_folder(config_path) / "swing-state.json", state)
+    intraday.write_json(intraday.config_folder(config_path) / "swing-state.json", state)  # Atomic.
 
 
 # ---------- after the close: candidates ----------
@@ -507,6 +510,14 @@ def scan(
             "risk_pct": round(100 * risk / hit["close"], 2),
         })  # fmt: skip
     found.sort(key=lambda row: (row["proven"], row.get("vol_ratio") or 0), reverse=True)
+    for row in found[:10]:
+        try:
+            row["odds"] = simulate_plan(
+                config_path, row["symbol"], row["close"], row["stop"], row["target"],
+                int(cfg["max_hold_days"]), int(cfg["odds_replays"]), bars=data[row["symbol"]],
+            )  # fmt: skip
+        except ValueError as exc:
+            row["odds"] = {"unavailable": str(exc)[:120]}
     report = {
         "date": str(today),
         "for_session": "next session",
@@ -529,6 +540,47 @@ def scan(
     }
     intraday.write_json(folder / f"swing-candidates-{today}.json", report)
     return report
+
+
+def plan_qty(config_path: Path, entry: float, stop: float) -> int:
+    """Shares the swing book would buy for this plan (its limits, or the default book's)."""
+    import trade_check
+
+    cfg = settings(config_path)
+    try:
+        book = read_book(config_path)
+    except (ValueError, OSError, sqlite3.Error):
+        book = {"limits": {"risk": "500", "daily_loss": "1500", "position_limit": "25000"},
+                "positions": {}, "realized_by_day": {}, "cash": "100000"}  # fmt: skip
+    costs = {key: str(cfg[key]) for key in ("fee_bps", "fee_flat_inr", "slippage_bps")}
+    sized = trade_check.size({"stop": stop}, book, costs, entry, str(dt.date.today()))
+    return int(sized["qty"])
+
+
+def simulate_plan(
+    config_path: Path, symbol: str, entry: float, stop: float, target: float,
+    hold_days: int | None = None, replays: int = 5000, qty: int | None = None,
+    bars: list[dict] | None = None,
+) -> dict[str, Any]:  # fmt: skip
+    """The swing Monte Carlo for one plan on the stock's own stored daily candles."""
+    import swing_machine
+
+    cfg = settings(config_path)
+    symbol = intraday.normalise_symbol(symbol)
+    if bars is None:
+        bars = all_bars(intraday.config_folder(config_path) / "scan.sqlite").get(symbol, [])
+    if not bars:
+        raise ValueError(
+            f"No stored daily candles for {symbol}; it must be an F&O stock the scan stores"
+        )
+    hold = int(hold_days or cfg["max_hold_days"])
+    shares = qty or plan_qty(config_path, entry, stop)
+    if shares < 1:
+        raise ValueError("No whole share fits the swing book's limits for this stop")
+    costs = {key: cfg[key] for key in ("fee_bps", "fee_flat_inr", "slippage_bps")}
+    result = swing_machine.for_plan(bars, entry, stop, target, hold, shares, costs, replays)
+    result.update(symbol=symbol, entry=entry, stop=stop, target=target)
+    return result
 
 
 # ---------- in session: enter and manage ----------
@@ -585,7 +637,7 @@ def evidence(
         raise ValueError("Swing evidence does not cover the journal's required checks")
     return {
         "version": 1, "symbol": candidate["symbol"], "quote_source": "kite:quote",
-        "quote_as_of": clock.isoformat(), "checked_at": clock.isoformat(),
+        "quote_as_of": clock.isoformat(), "checked_at": clock.isoformat(),  # Quote age checked above.
         "checks": checks, "evidence_sources": sources,
         "session": {"date": str(clock.date()), "open": day["open"], "entry_cutoff": day["entry_cutoff"],
                     "close": day["close"], "source": manifest["source"]},
@@ -637,8 +689,19 @@ def enter(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str]
         ask = float((((quote.get("depth") or {}).get("sell") or [{}])[0]).get("price") or 0)
         last = ask or float(quote.get("last_price") or 0)  # A buy pays the ask.
         why = None
+        stamp = quote.get("timestamp") or quote.get("last_trade_time")
+        try:
+            seen = intraday.now_ist(str(stamp)) if stamp else None
+        except ValueError:
+            seen = None
         if symbol in book["positions"]:
             why = "already held"
+        elif seen is None or not -5 <= (clock - seen).total_seconds() <= 120:
+            why = "the quote is stale or has no time; no entry on old data"
+        elif guard := safety.entry_guard(config_path, clock):
+            why = guard
+        elif other := safety.held_elsewhere(config_path, symbol, "swing"):
+            why = other
         elif not opened or not last:
             why = "no quote"
         elif opened > candidate["close"] * (1 + float(cfg["max_gap_up_pct"]) / 100):
@@ -652,6 +715,20 @@ def enter(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str]
         sized = trade_check.size(plan, book, costs, last, str(clock.date()))
         if sized["qty"] < 1:
             result["skipped"][symbol] = f"no whole share fits the {sized['decided_by']} limit"
+            continue
+        ratio = safety.net_reward_risk(
+            last, candidate["stop"], candidate["target"], sized["qty"], float(cfg["fee_bps"]),
+            float(cfg["fee_flat_inr"]), float(cfg["slippage_bps"]),
+        )  # fmt: skip
+        minimum = float(safety.settings(intraday.load_config(config_path))["min_net_reward_risk"])
+        if ratio < minimum:
+            result["skipped"][symbol] = (
+                f"reward after costs {ratio:.2f}x the risk; needs {minimum:g}x"
+            )
+            continue
+        odds = candidate.get("odds") or {}
+        if cfg.get("require_positive_odds", True) and odds and odds.get("expected_pnl_inr", 0) <= 0:
+            result["skipped"][symbol] = "the swing simulation expects a loss after costs"
             continue
         proof = evidence(candidate, quote, clock, times, report, manifest)
 
@@ -884,6 +961,13 @@ def main(argv: list[str] | None = None) -> int:
     making.add_argument("--position", default="25000")
     for name in ("tournament", "scan", "tick", "status"):
         sub.add_parser(name)
+    simulating = sub.add_parser("simulate", help="Monte Carlo for one swing plan")
+    simulating.add_argument("symbol")
+    simulating.add_argument("--entry", type=float, required=True)
+    simulating.add_argument("--stop", type=float, required=True)
+    simulating.add_argument("--target", type=float, required=True)
+    simulating.add_argument("--days", type=int)
+    simulating.add_argument("--replays", type=int, default=5000)
     args = parser.parse_args(argv)
     try:
         clock = intraday.now_ist(args.now)
@@ -907,6 +991,11 @@ def main(argv: list[str] | None = None) -> int:
             ]
         elif args.command == "tick":
             result = tick(args.config, clock)
+        elif args.command == "simulate":
+            odds = simulate_plan(args.config, args.symbol, args.entry, args.stop, args.target,
+                                 args.days, args.replays)  # fmt: skip
+            print(odds["summary"])
+            result = {key: odds[key] for key in odds if key not in ("histogram",)}
         else:
             result = status(args.config)
     except (ValueError, OSError, KeyError, sqlite3.Error) as exc:

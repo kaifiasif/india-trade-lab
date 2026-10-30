@@ -58,6 +58,7 @@ RATE_PER_MINUTE = {
     "save_secret": 20,
     "run_job": 10,
     "check_openrouter": 6,
+    "swing_simulate": 12,
 }
 DEFAULT_RATE = 30
 
@@ -661,6 +662,31 @@ class SetupApi:
             )
             conn.execute("INSERT INTO book VALUES (1, ?)", (json.dumps(book),))
         return {"ok": True, "cash": book["cash"], "symbols": symbols}, {}, ["paper.sqlite"]
+
+    def do_swing_simulate(self, payload: dict, **_: Any):
+        """Read only: the swing Monte Carlo for a plan you type, on stored daily candles."""
+        import swing
+
+        self._require_project()
+        try:
+            entry, stop, target = (float(payload[key]) for key in ("entry", "stop", "target"))
+            days = int(payload.get("hold_days", 5))
+            replays = int(payload.get("replays", 5000))
+        except (KeyError, TypeError, ValueError):
+            raise ApiError(
+                422, "invalid", "Give a stock, entry, stop and target as numbers"
+            ) from None
+        if not all(0 < value < 1_000_000 for value in (entry, stop, target)):
+            raise ApiError(422, "invalid", "Prices must be positive and realistic")
+        if not 1 <= days <= 20 or not 500 <= replays <= 10_000:
+            raise ApiError(422, "invalid", "Hold 1-20 sessions with 500-10,000 replays")
+        try:
+            result = swing.simulate_plan(
+                self.config, str(payload.get("symbol", "")), entry, stop, target, days, replays
+            )
+        except ValueError as error:
+            raise ApiError(422, "invalid", str(error)) from None
+        return result, {}, []
 
     def do_create_swing_book(self, payload: dict, **_: Any):
         import swing

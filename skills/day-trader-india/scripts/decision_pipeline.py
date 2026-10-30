@@ -116,6 +116,16 @@ OPTIONAL_CONFIG = {
     # The trade desk agent runs the Entry Timer, Exit Planner, Time Machine, trade check
     # and Price Alerts on every session tick, for each of today's picks.
     "trade_desk": {"enabled": True},
+    # Desk-wide safety rules for both books: market-conditions guard, reward after costs,
+    # automatic intraday square-off. They can only stop or close trades.
+    "safety": {
+        "market_guard": True,
+        "max_india_vix": 22.0,
+        "max_index_move_pct": 2.0,
+        "guard_max_age_seconds": 180,
+        "min_net_reward_risk": 1.5,
+        "auto_square_off": True,
+    },
     # Swing desk: up to 5-session holds on volume-confirmed daily setups, in its own paper
     # book (swing.sqlite). Only setups proven by the swing tournament are entered.
     "swing": {
@@ -131,6 +141,8 @@ OPTIONAL_CONFIG = {
         "fee_bps": 12.0,
         "fee_flat_inr": 20.0,
         "slippage_bps": 5.0,
+        "require_positive_odds": True,
+        "odds_replays": 2000,
     },
     # Time Machine gate (downgrade only): skip autopilot entries whose replays lean
     # toward the stop. Without 20 stored sessions the gate lets the entry through,
@@ -162,7 +174,7 @@ OPTIONAL_CONFIG = {
 }
 NESTED_DEFAULTS = (
     "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
-    "openrouter", "trade_desk", "timemachine", "alerts", "swing",
+    "openrouter", "trade_desk", "timemachine", "alerts", "swing", "safety",
 )  # fmt: skip
 
 DEFAULT_CONFIG = {
@@ -447,6 +459,31 @@ class DailyCoordinator:
             raise ValueError(
                 "swing needs a separate .sqlite book, 1-20 hold days, 1-3 new trades a day, a "
                 "1-20 day event window, volume ratio 1-10, gap 0-10%, target 1-5R and sane costs"
+            )
+        rules = cfg["safety"]
+        if (
+            any(type(rules[key]) is not bool for key in ("market_guard", "auto_square_off"))
+            or type(swing["require_positive_odds"]) is not bool
+            or type(swing["odds_replays"]) is not int
+            or not 500 <= swing["odds_replays"] <= 20_000
+            or any(
+                not isinstance(rules[key], (int, float)) or isinstance(rules[key], bool)
+                for key in (
+                    "max_india_vix",
+                    "max_index_move_pct",
+                    "guard_max_age_seconds",
+                    "min_net_reward_risk",
+                )
+            )  # fmt: skip
+            or not 10 <= rules["max_india_vix"] <= 60
+            or not 0.5 <= rules["max_index_move_pct"] <= 10
+            or not 60 <= rules["guard_max_age_seconds"] <= 900
+            or not 1 <= rules["min_net_reward_risk"] <= 5
+        ):
+            raise ValueError(
+                "safety needs true/false switches, India VIX 10-60, an index move of 0.5-10%, a "
+                "guard age of 60-900 seconds and a reward after costs of 1-5x; swing odds "
+                "replays 500-20,000"
             )
         router_caps = cfg["openrouter"]
         if (

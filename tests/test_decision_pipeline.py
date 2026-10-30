@@ -98,7 +98,15 @@ def setup(directory: Path):
         conn.execute("CREATE TABLE book (id INTEGER PRIMARY KEY, data TEXT)")
         conn.execute("INSERT INTO book VALUES (1,?)", (json.dumps(book),))
     prove(directory, now)
+    calm_market(directory, now)
     return DailyCoordinator(config_path, reviewer=FixtureReviewer(), now=lambda: now), now
+
+
+def calm_market(directory: Path, at: dt.datetime) -> None:
+    """What the session worker writes each tick: India VIX and the Nifty read, nothing blocking."""
+    (directory / "market-guard.json").write_text(
+        json.dumps({"at": at.isoformat(), "india_vix": 13.2, "nifty_move_pct": 0.4, "blocks": []})
+    )
 
 
 class PipelineTests(unittest.TestCase):
@@ -187,6 +195,7 @@ class PipelineTests(unittest.TestCase):
                     "10",
                     now=now,
                     evidence=evidence,
+                    target="110",
                 )
                 conn.execute("UPDATE book SET data=?", (json.dumps(book),))
             coordinator.path("universe").unlink()

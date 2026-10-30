@@ -52,6 +52,41 @@ target alert, removed when the trade closes.
 A stop is a plan, not a guarantee. An overnight gap can open below the stop and
 lose more than the planned risk.
 
+## Swing Monte Carlo and the scenario simulator
+
+`scripts/swing_machine.py` replays the next few sessions 5,000 times (seed 19)
+from the stock's own last 250 daily candles. Each day is drawn as ratios to the
+previous close, so overnight gaps are as large and as frequent as the stock's
+real ones. The replay applies the desk's exit rules:
+
+- a gap through the stop exits at the open;
+- otherwise the stop, then the target;
+- breakeven after +1R, a two-day-low trail after +1.5R, a time exit at the end.
+
+Every exit is valued in rupees for the shares the swing book would buy, after
+fees, delivery charges and slippage on both sides.
+
+It reports:
+
+- the odds of target, stop (split into stop, gap stop and trailing stop) and time
+  exits;
+- the cumulative chance of target and of stop by session 1, 2, and so on to N;
+- the rupee distribution: expected value, median, middle half, 5th and 95th
+  percentiles, the average of the worst 5%, the worst outcome, and the chance of
+  a profit;
+- a histogram.
+
+The scan attaches this to every candidate. With `require_positive_odds` (on by
+default), a candidate whose simulation expects a loss after costs is not entered.
+
+On the dashboard, the Swing desk card has a scenario simulator. Load a
+candidate, or type any stock the scan stores, then change the entry, stop,
+target or holding days and replay. The command is
+`python3 scripts/swing.py simulate INFY --entry 1612 --stop 1570 --target 1696 --days 5`.
+
+The simulation is built from the stock's history, not a forecast: results and
+shocks can do what that history never did.
+
 ## Proof first
 
 `swing.py tournament` replays each setup on every stored stock:

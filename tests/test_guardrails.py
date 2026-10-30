@@ -53,6 +53,7 @@ class GuardrailTests(unittest.TestCase):
             exit_fee=10,
             now=dt.datetime.fromisoformat(at),
             evidence=evidence,
+            target=110,
         )
 
     def sell(self, book, at="2026-10-19T11:00:00+05:30"):

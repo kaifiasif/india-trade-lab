@@ -62,6 +62,11 @@ case "$job" in
     # 09:31: volume, VWAP and strength for the judge's picks; failures are not entered.
     exec python3 scripts/market_scan.py --config "$CONFIG" confirm ;;
   market)
+    # A late start after a reboot is fine until 15:45; after that there is nothing to watch.
+    now=$(TZ=Asia/Kolkata date +%H%M)
+    if [ "$now" -ge 1545 ] || [ "$now" -lt 0900 ]; then
+      echo "Outside market hours ($now IST); the worker starts at 09:05." && exit 0
+    fi
     exec python3 scripts/market_service.py --config "$CONFIG" --refresh-india --prepare ;;
   aftermarket)
     # Today's completed session into history, while today's Kite token is still valid,

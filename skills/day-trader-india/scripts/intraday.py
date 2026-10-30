@@ -149,7 +149,10 @@ def round_up(price: float) -> float:
 
 
 def write_json(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+    """Write whole or not at all: a crash mid-write never leaves half a file to recover from."""
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def read_json(path: Path) -> dict[str, Any]:
