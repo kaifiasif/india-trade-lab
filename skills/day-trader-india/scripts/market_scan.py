@@ -52,6 +52,8 @@ from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
+import intraday
+
 from broker_data import NoRedirect
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -287,7 +289,7 @@ class ScanStore:
         rows = []
         for candle in candles:
             try:
-                day = dt.datetime.fromisoformat(candle[0]).date()
+                day = intraday.kite_time(candle[0]).date()
                 if day >= before:
                     continue  # Only completed sessions.
                 rows.append((symbol, str(day), *(float(value) for value in candle[1:6])))
@@ -915,8 +917,8 @@ def confirm(
             candles = []
         firsts = [
             float(candle[5]) for candle in candles
-            if dt.datetime.fromisoformat(candle[0]).date() < today
-            and dt.datetime.fromisoformat(candle[0]).strftime("%H:%M") == "09:15"
+            if intraday.kite_time(candle[0]).date() < today
+            and intraday.kite_time(candle[0]).strftime("%H:%M") == "09:15"
         ][-20:]  # fmt: skip
         normal = statistics.mean(firsts) if len(firsts) >= 5 else None
         rvol = round(quote["volume"] / normal, 2) if normal and quote.get("volume") else None

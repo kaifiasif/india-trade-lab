@@ -35,6 +35,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import intraday
+
 from broker_data import NoRedirect
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -382,7 +384,7 @@ def kite_sector_closes(token: str, days: int, now: dt.datetime, opener=None) -> 
     rows = []
     for candle in candles:
         try:
-            rows.append((str(dt.datetime.fromisoformat(candle[0]).date()), float(candle[4])))
+            rows.append((str(intraday.kite_time(candle[0]).date()), float(candle[4])))
         except (ValueError, TypeError, IndexError):
             continue
     return sorted(rows)

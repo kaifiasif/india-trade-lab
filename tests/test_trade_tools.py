@@ -104,6 +104,13 @@ def plan_for(symbol="NSE:DEMO", entry=102.6):
     )
 
 
+class KiteTimeTests(unittest.TestCase):
+    def test_kite_offsets_without_a_colon_parse_on_every_python(self):
+        bars = intraday.parse_candles([["2026-10-29T09:15:00+0530", 1, 2, 0.5, 1.5, 10]])
+        self.assertEqual(bars[0]["t"], at("09:15"))
+        self.assertEqual(intraday.kite_time("2026-10-29T09:15:00+05:30"), at("09:15"))
+
+
 class EntryTimerTests(unittest.TestCase):
     def test_statuses_through_the_morning(self):
         rows, times = opening_session(), times_for()

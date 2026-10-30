@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -63,13 +64,19 @@ def now_ist(value: str | None = None) -> dt.datetime:
     return parsed.replace(tzinfo=IST) if parsed.tzinfo is None else parsed.astimezone(IST)
 
 
+def kite_time(value: object) -> dt.datetime:
+    """Kite's candle time, e.g. ``2026-09-28T09:15:00+0530``; Python 3.10 needs ``+05:30``."""
+    text = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", str(value).strip())
+    return dt.datetime.fromisoformat(text)
+
+
 def parse_candles(candles: list[list], day: dt.date | None = None) -> list[dict[str, Any]]:
     """Kite candles ``[time, open, high, low, close, volume]`` as bar dicts, in time order."""
     bars = []
     for candle in candles:
         if not isinstance(candle, (list, tuple)) or len(candle) < 6:
             raise ValueError("Malformed candle")
-        stamp = dt.datetime.fromisoformat(str(candle[0])).astimezone(IST)
+        stamp = kite_time(candle[0]).astimezone(IST)
         if day is not None and stamp.date() != day:
             continue
         values = [float(value) for value in candle[1:6]]
