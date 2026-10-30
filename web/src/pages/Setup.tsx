@@ -128,7 +128,7 @@ function ProfileStep() {
       <Field label="Send the morning report to" htmlFor="to" hint="Up to five addresses, separated by commas." error={errors.email_to}>
         <Input id="to" type="text" inputMode="email" value={to} onChange={(event) => setTo(event.target.value)} autoComplete="email" />
       </Field>
-      <Field label="Send from (optional)" htmlFor="from" hint="Leave empty to send from the Gmail account you connect." error={errors.email_from}>
+      <Field label="Send from (optional)" htmlFor="from" hint="Leave empty to send from the address you set in Email delivery." error={errors.email_from}>
         <Input id="from" type="email" value={from} onChange={(event) => setFrom(event.target.value)} />
       </Field>
       <Button type="submit" className="w-fit" disabled={busy !== null}>

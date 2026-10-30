@@ -191,8 +191,12 @@ export function SettingsPage() {
     }
   }, []);
   useEffect(() => {
+    if (status && !status.config_exists) {
+      setMissing(true); // No project yet: nothing to load, so no request.
+      return;
+    }
     load();
-  }, [load, status?.config_exists]);
+  }, [load, status, status?.config_exists]);
 
   const changes = useMemo(() => {
     if (!view) return {};

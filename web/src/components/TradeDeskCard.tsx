@@ -41,12 +41,12 @@ function Fan({ fan, entry, stop, target }: { fan: FanPoint[]; entry: number; sto
     fan.map((point, index) => `${x(index)},${y(point[top])}`).join(" ") +
     " " +
     [...fan].reverse().map((point, index) => `${x(fan.length - 1 - index)},${y(point[bottom])}`).join(" ");
-  const line = (price: number) => <line x1={0} x2={width} y1={y(price)} y2={y(price)} strokeDasharray="4 4" />;
+  const line = (price: number) => <line x1={0} x2={width} y1={y(price)} y2={y(price)} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />;
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-28 w-full" role="img" aria-label="Spread of replayed prices until the square-off">
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-28 w-full" role="img" aria-label="Spread of replayed prices until the square-off">
       <polygon points={band("p95", "p5")} className="fill-primary/10" />
       <polygon points={band("p75", "p25")} className="fill-primary/20" />
-      <polyline points={fan.map((point, index) => `${x(index)},${y(point.p50)}`).join(" ")} className="fill-none stroke-primary" strokeWidth={2} />
+      <polyline points={fan.map((point, index) => `${x(index)},${y(point.p50)}`).join(" ")} className="fill-none stroke-primary" strokeWidth={2} vectorEffect="non-scaling-stroke" />
       <g className="stroke-success">{line(target)}</g>
       <g className="stroke-muted-foreground">{line(entry)}</g>
       <g className="stroke-destructive">{line(stop)}</g>

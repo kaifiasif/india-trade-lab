@@ -158,7 +158,7 @@ class EmailTests(Isolated):
 
             with (
                 patch("smtplib.SMTP", FakeSMTP),
-                patch.object(premarket, "public_mail_host", return_value=True),
+                patch.object(premarket, "mail_host_problem", return_value=None),
             ):
                 result = premarket.send_email(report, "<p>x</p>", config)
         self.assertTrue(result["sent"])

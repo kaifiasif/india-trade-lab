@@ -828,8 +828,9 @@ def smtp_send(message: EmailMessage, config: dict) -> dict[str, Any]:
     password = os.environ.get("SMTP_PASSWORD") or secret_store.get("SMTP_PASSWORD")
     if not password:
         return {"sent": False, "reason": "no SMTP password saved (Setup → Email)"}
-    if not public_mail_host(config["smtp_host"]):
-        return {"sent": False, "reason": "the mail server must be a public host name"}
+    problem = mail_host_problem(config["smtp_host"])
+    if problem:
+        return {"sent": False, "reason": problem}
     message["From"] = config.get("email_from") or config["smtp_user"]
     message["To"] = ", ".join(recipients) if isinstance(recipients, list) else recipients
     try:
@@ -850,19 +851,26 @@ def smtp_send(message: EmailMessage, config: dict) -> dict[str, Any]:
     return {"sent": True, "to": secret_store.mask_email(message["To"])}
 
 
-def public_mail_host(host: str) -> bool:
-    """Refuse IP literals and names that resolve to private, loopback or link-local
-    addresses, so a settings change cannot point the mailer at internal services."""
+def mail_host_problem(host: str) -> str | None:
+    """Why the mail server cannot be used, in plain words, or None when it can."""
     import ipaddress
     import socket
 
     if not re.fullmatch(r"(?=.{1,253}$)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}", host or ""):
-        return False
+        return "the mail server must be a host name such as smtp.gmail.com"
     try:
         addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
     except OSError:
-        return False
-    return bool(addresses) and all(ipaddress.ip_address(item).is_global for item in addresses)
+        return f"could not look up {host}; check the server name and this machine's internet connection"
+    if not addresses or not all(ipaddress.ip_address(item).is_global for item in addresses):
+        return f"{host} points at a private or local address, which is not allowed"
+    return None
+
+
+def public_mail_host(host: str) -> bool:
+    """Refuse IP literals and names that resolve to private, loopback or link-local
+    addresses, so a settings change cannot point the mailer at internal services."""
+    return mail_host_problem(host) is None
 
 
 def main(argv: list[str] | None = None) -> int:
