@@ -227,6 +227,13 @@ def allowed_for(
                 "allowed": [],
                 "basis": "no strategy proved an edge after doubled costs; the desk sits out",
             }
+        import regime
+
+        proven, notes = regime.filter_allowed(root, card, proven, session_date)
+        if notes:
+            basis += "; " + "; ".join(notes)
+        if not proven:
+            return {"allowed": [], "basis": basis + "; the desk sits out in this regime"}
     if reports_dir is not None:
         try:
             report = json.loads(

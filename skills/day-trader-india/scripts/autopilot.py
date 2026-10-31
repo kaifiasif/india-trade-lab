@@ -80,19 +80,32 @@ def safety_gate(coordinator: Any, symbol: str, ticket: dict, clock: dt.datetime)
     rules = safety.settings(config)
     path = getattr(coordinator, "config_path", None)
     if path is not None:
-        blocked = safety.entry_guard(path, clock) or safety.held_elsewhere(path, symbol, "intraday")
+        import surveillance
+
+        blocked = (
+            safety.entry_guard(path, clock)
+            or surveillance.gate(path, symbol, clock)[0]
+            or safety.held_elsewhere(path, symbol, "intraday")
+        )
         if blocked:
             return blocked
     try:
         ratio = safety.net_reward_risk(
             float(ticket["price_inr"]), float(ticket["stop_inr"]), float(ticket["target_inr"]),
             int(ticket["qty"]), float(config.get("fee_bps", 5)), float(config.get("fee_flat_inr", 10)),
-            float(config.get("slippage_bps", 5)),
+            float(config.get("slippage_bps", 5)), "intraday",
         )  # fmt: skip
     except (KeyError, TypeError, ValueError):
         return "the ticket lacks an entry, stop, target or quantity"
     if ratio < float(rules["min_net_reward_risk"]):
         return f"reward after costs is {ratio:.2f}x the risk; the desk needs {float(rules['min_net_reward_risk']):g}x"
+    if path is not None:
+        import portfolio
+
+        return portfolio.gate(
+            path, "intraday", symbol, float(ticket["price_inr"]), float(ticket["stop_inr"]),
+            int(ticket["qty"]), ticket.get("strategy_version"),
+        )[0]  # fmt: skip
     return ""
 
 

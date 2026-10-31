@@ -85,11 +85,17 @@ def simulate(
     fee_rate = float(costs.get("fee_bps", 12)) / 10_000
     fee_flat = float(costs.get("fee_flat_inr", 20))
 
-    def fee(price: float) -> float:
+    exact = bool(costs.get("exact"))
+
+    def fee(price: float, which: str = "buy") -> float:
+        if exact:
+            import charges
+
+            return charges.fee("delivery", which, price, qty)
         return fee_flat + price * qty * fee_rate
 
     bought = entry * (1 + slip)
-    per_share_costs = 2 * fee(entry) / qty
+    per_share_costs = (fee(entry, "buy") + fee(entry, "sell")) / qty
     exits = {"target": 0, "stop": 0, "gap stop": 0, "trailing stop": 0, "time": 0}
     target_by = [0] * hold_days
     stop_by = [0] * hold_days
@@ -133,7 +139,7 @@ def simulate(
         elif why != "time":
             stop_by[day_out] += 1
         sold = exit_price * (1 - slip)
-        pnl.append((sold - bought) * qty - fee(bought) - fee(sold))
+        pnl.append((sold - bought) * qty - fee(bought, "buy") - fee(sold, "sell"))
         r_values.append((sold - bought) / risk)
     ordered = sorted(pnl)
     worst = ordered[: max(1, replays // 20)]
@@ -182,7 +188,10 @@ def simulate(
             "width_inr": round(width, 2),
             "counts": counts,
         },
-        "planned_loss_inr": round((bought - stop * (1 - slip)) * qty + fee(bought) + fee(stop), 2),
+        "planned_loss_inr": round(
+            (bought - stop * (1 - slip)) * qty + fee(bought, "buy") + fee(stop, "sell"), 2
+        ),
+        "exact_charges": exact,
     }
 
 

@@ -53,6 +53,7 @@ RATE_PER_MINUTE = {
     "kite_exchange": 5,
     "kite_login_url": 10,
     "send_test_email": 3,
+    "send_test_alert": 3,
     "upload_equity_list": 5,
     "build_universe": 5,
     "save_secret": 20,
@@ -489,6 +490,16 @@ class SetupApi:
             ) from None
         secret_store.set_secret("KITE_ACCESS_TOKEN", token)
         return {"ok": True, "token": self._token_today()}, {}, ["KITE_ACCESS_TOKEN"]
+
+    def do_send_test_alert(self, payload: dict, **_: Any):
+        """A test watchdog alert: by Telegram when set up, else by email."""
+        self._require_project()
+        import watchdog
+
+        channel = watchdog.send(self.config, "Test from India Trade Lab: alerts reach you here.")
+        if channel not in ("telegram", "email"):
+            raise ApiError(502, "alert_failed", channel)
+        return {"sent": True, "via": channel}, {}, []
 
     def do_send_test_email(self, payload: dict, **_: Any):
         self._require_project()

@@ -148,6 +148,45 @@ Persistent=false
 WantedBy=timers.target
 UNIT
 
+unit india-trade-lab-watchdog.service <<UNIT
+[Unit]
+Description=India Trade Lab watchdog (missed jobs, worker, disk, backups; Telegram or email)
+After=network-online.target
+[Service]
+Type=oneshot
+$common
+ExecStart=$REPO/deploy/oracle/run.sh watchdog
+UNIT
+
+unit india-trade-lab-watchdog.timer <<'UNIT'
+[Unit]
+Description=Watchdog every 2 minutes
+[Timer]
+OnCalendar=*-*-* *:0/2:00
+Persistent=false
+[Install]
+WantedBy=timers.target
+UNIT
+
+unit india-trade-lab-backup.service <<UNIT
+[Unit]
+Description=India Trade Lab nightly backup of journals, learning and settings
+[Service]
+Type=oneshot
+$common
+ExecStart=$REPO/deploy/oracle/run.sh backup
+UNIT
+
+unit india-trade-lab-backup.timer <<'UNIT'
+[Unit]
+Description=Backup at 23:30 IST every day
+[Timer]
+OnCalendar=*-*-* 23:30:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+UNIT
+
 unit india-trade-lab-observatory.service <<UNIT
 [Unit]
 Description=India Trade Lab dashboard on 127.0.0.1:8765 (reach it through an SSH tunnel)
@@ -171,7 +210,8 @@ sudo visudo -cf /etc/sudoers.d/india-trade-lab >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable --now india-trade-lab-premarket.timer india-trade-lab-open.timer \
   india-trade-lab-confirm.timer india-trade-lab-market.timer \
-  india-trade-lab-aftermarket.timer india-trade-lab-observatory.service
+  india-trade-lab-aftermarket.timer india-trade-lab-watchdog.timer \
+  india-trade-lab-backup.timer india-trade-lab-observatory.service
 
 cat <<DONE
 

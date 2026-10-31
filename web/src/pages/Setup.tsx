@@ -311,6 +311,71 @@ function EmailStep() {
         </Button>
         {!email?.recipients && <span className="text-xs text-warning">Add where to send the report in step 2 first.</span>}
       </div>
+      <AlertsAndBackups chat={String((settings.notify as { telegram_chat_id?: string } | undefined)?.telegram_chat_id ?? "")} />
+    </div>
+  );
+}
+
+/** Watchdog alerts on the phone (Telegram, else email) and the backup passphrase. */
+function AlertsAndBackups({ chat: savedChat }: { chat: string }) {
+  const { refreshSetup } = useData();
+  const [chat, setChat] = useState(savedChat);
+  const { busy, run } = useBusy();
+  return (
+    <div className="grid gap-4 border-t pt-4">
+      <div>
+        <h3 className="text-sm font-medium">Phone alerts and backups</h3>
+        <p className="text-sm text-muted-foreground">
+          The watchdog checks every 2 minutes for a missed login, scan or report, a stalled worker, a full disk or a missing backup. It messages
+          you on Telegram when a bot is set up (free: create one with @BotFather), otherwise by email. From your chat only: /status, /pause (no
+          new paper entries) and /resume.
+        </p>
+      </div>
+      <SecretField name="TELEGRAM_BOT_TOKEN" label="Telegram bot token" placeholder="123456789:AA…" hint="From @BotFather. Kept on the server; never shown again." />
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          run("chat", async () => {
+            try {
+              await saveSettings({ notify: { telegram_chat_id: chat.trim() } });
+              await refreshSetup();
+              toast.success("Chat saved");
+            } catch (error) {
+              toast.error("Chat not saved", explain(error));
+            }
+          });
+        }}
+      >
+        <Field label="Your Telegram chat ID" htmlFor="telegram-chat" hint="Message your bot, then open api.telegram.org/bot<token>/getUpdates to see it. Only this chat is answered.">
+          <Input id="telegram-chat" inputMode="numeric" value={chat} onChange={(event) => setChat(event.target.value.replace(/[^\d-]/g, ""))} className="num w-48" />
+        </Field>
+        <Button type="submit" variant="outline" disabled={busy !== null}>
+          {busy === "chat" && <Loader2 className="animate-spin" />} Save chat
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy !== null}
+          onClick={() =>
+            run("alert", async () => {
+              try {
+                const result = await setup<{ via: string }>("send_test_alert");
+                toast.success("Test alert sent", `By ${result.via}.`);
+              } catch (error) {
+                toast.error("Test alert failed", explain(error));
+              }
+            })
+          }
+        >
+          {busy === "alert" ? <Loader2 className="animate-spin" /> : <Mail />} Send a test alert
+        </Button>
+      </form>
+      <SecretField
+        name="BACKUP_PASSPHRASE"
+        label="Backup passphrase"
+        hint="Encrypts the nightly backup of both journals, learning and settings (openssl AES-256). Keep a copy somewhere safe: without it a backup cannot be opened."
+      />
     </div>
   );
 }

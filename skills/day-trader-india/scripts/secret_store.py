@@ -25,6 +25,8 @@ SECRET_KEYS = {
     "ANTHROPIC_API_KEY": "Anthropic API key",
     "OPENAI_API_KEY": "OpenAI API key",
     "LOCAL_LLM_API_KEY": "Local model server key",
+    "TELEGRAM_BOT_TOKEN": "Telegram bot token (alerts and /pause)",
+    "BACKUP_PASSPHRASE": "Passphrase that encrypts backups",
 }
 TOKEN_KEYS = {"KITE_ACCESS_TOKEN": "Today's Kite access token"}
 SECRETS_FILE = "secrets.env"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run one scheduled India Trade Lab job with the private env files loaded.
-# Usage: run.sh premarket | open | confirm | market | aftermarket | observatory
+# Usage: run.sh premarket | open | confirm | market | aftermarket | watchdog | backup | observatory
 # Paper research only: nothing here places an order.
 set -euo pipefail
 
@@ -23,7 +23,8 @@ trading_day() {
 import datetime as dt, json, sys
 ist = dt.timezone(dt.timedelta(hours=5, minutes=30))
 sessions = json.load(open(sys.argv[1]))["sessions"]
-sys.exit(0 if str(dt.datetime.now(ist).date()) in sessions else 1)
+# A day listed as null (Muhurat, special sessions) is not traded by the desk.
+sys.exit(0 if sessions.get(str(dt.datetime.now(ist).date())) else 1)
 PY
 }
 
@@ -31,6 +32,16 @@ job="${1:-}"
 case "$job" in
   observatory)
     exec python3 scripts/observatory.py --data-dir "$DATA" ;;
+  watchdog)
+    # Every 2 minutes, every day: missed login, scan, report, worker, disk, backups.
+    exec python3 scripts/watchdog.py --config "$CONFIG" check ;;
+  backup)
+    # Nightly, every day; the first of the month also proves the newest backup restores.
+    python3 scripts/backup.py --config "$CONFIG" run
+    if [ "$(date +%d)" = "01" ]; then
+      exec python3 scripts/backup.py --config "$CONFIG" restore-test
+    fi
+    exit 0 ;;
 esac
 
 if ! trading_day; then
@@ -69,6 +80,9 @@ case "$job" in
     fi
     exec python3 scripts/market_service.py --config "$CONFIG" --refresh-india --prepare ;;
   aftermarket)
+    # Keep sessions.json in step with the bundled NSE calendar (holidays, closing auction).
+    python3 scripts/intraday.py --config "$CONFIG" sync-calendar \
+      || echo "Calendar sync failed; sessions.json is unchanged."
     # Today's completed session into history, while today's Kite token is still valid,
     # then re-run the strategy tournament so tomorrow trades only what is still proven.
     python3 scripts/data_sync.py --config "$CONFIG" --days 90 --max-symbols 10 \
@@ -92,6 +106,6 @@ case "$job" in
     # write the lessons and stock notes tomorrow's agents will read.
     exec python3 scripts/learning.py --config "$CONFIG" settle ;;
   *)
-    echo "Usage: run.sh premarket | open | confirm | market | aftermarket | observatory" >&2
+    echo "Usage: run.sh premarket | open | confirm | market | aftermarket | watchdog | backup | observatory" >&2
     exit 64 ;;
 esac

@@ -339,6 +339,12 @@ def evidence_catalogue(candidate: dict) -> dict[str, dict[str, Any]]:
                 "roles": ["news-analyst", "brokerage-analyst"],
                 "facts": {"latest_filed_quarter_inr_crore": signals["results"]},
             }
+        if signals.get("caution"):
+            catalogue[f"{symbol}#caution"] = {
+                "roles": ["liquidity-analyst", "news-analyst"],
+                "facts": {"exchange_flags": signals["caution"],
+                          "note": "NSE surveillance or F&O ban flags; not blocking, but crowded or watched"},
+            }  # fmt: skip
         if signals.get("insiders"):
             catalogue[f"{symbol}#insiders"] = {
                 "roles": ["news-analyst", "liquidity-analyst"],

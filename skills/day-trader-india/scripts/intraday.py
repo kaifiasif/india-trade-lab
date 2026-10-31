@@ -4,7 +4,7 @@
 The trade tools (entry timer, exit planner, time machine, trade check, price
 alerts) all work on completed five-minute bars in Asia/Kolkata time, on the
 session calendar in ``sessions.json`` (09:15-15:30, entries until 14:30, square-off
-at 15:15 on a normal day). Nothing here places an order.
+at 15:05 from 3 Aug 2026, before the 15:15 closing auction). Nothing here places an order.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import datetime as dt
 import json
 import math
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -161,3 +162,50 @@ def read_json(path: Path) -> dict[str, Any]:
     if path.stat().st_size > 5_000_000:
         raise ValueError(f"{path.name} exceeds its size limit")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def sync_calendar(config_path: Path, bundled: Path | None = None) -> dict[str, Any]:
+    """Bring the project's sessions.json up to the bundled NSE calendar; keep a backup.
+
+    The bundled file carries exchange changes (holidays, the closing auction's earlier
+    square-off). A project copy made before such a change would otherwise keep old times.
+    """
+    import shutil
+
+    bundled = bundled or Path(__file__).resolve().parents[1] / "assets" / "nse-sessions-2026.json"
+    config = load_config(config_path)
+    target = config_folder(config_path) / config.get("sessions", "sessions.json")
+    fresh = json.loads(bundled.read_text(encoding="utf-8"))
+    current = json.loads(target.read_text(encoding="utf-8")) if target.is_file() else {}
+    merged = {**current, **fresh, "sessions": {**current.get("sessions", {}), **fresh["sessions"]}}
+    if merged == current:
+        return {"changed": False}
+    changed = sorted(
+        day
+        for day, value in fresh["sessions"].items()
+        if current.get("sessions", {}).get(day) != value
+    )
+    if target.is_file():
+        shutil.copy2(target, target.with_name(target.name + ".before-sync"))
+    write_json(target, merged)
+    return {"changed": True, "days_updated": len(changed), "first": changed[:3]}
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python3 intraday.py sync-calendar``: update sessions.json from the bundled calendar."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument("--config", type=Path, default=Path("data/observatory/pipeline.json"))
+    parser.add_argument("command", choices=["sync-calendar"])
+    args = parser.parse_args(argv)
+    try:
+        print(json.dumps(sync_calendar(args.config), indent=2))
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"Calendar sync refused: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

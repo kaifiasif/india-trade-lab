@@ -32,7 +32,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import regime
 import technical
+import validation
 from history import HistoryStore
 
 import strategies
@@ -43,6 +45,9 @@ RULES = {
     "min_profit_factor": 1.15,
     "folds": 3,
     "min_positive_folds": 2,
+    "min_luck_percentile": 95.0,  # Beat 95% of random-entry twins at double costs.
+    "luck_twins": 200,
+    "min_dsr": 0.95,  # Deflated Sharpe: probability the edge beats the luckiest trial.
 }
 DEFAULTS = {
     "risk_inr": 250.0,
@@ -77,8 +82,101 @@ def load(history: Path, first: dt.date | None = None) -> dict[str, list[dict]]:
     return result
 
 
-def _fee(price: float, qty: int, cfg: dict, multiple: float) -> float:
+def _fee(
+    price: float, qty: int, cfg: dict, multiple: float, which: str = "buy", day: str | None = None
+) -> float:
+    """One side's charges: exact Zerodha intraday charges, or the flat model if switched off."""
+    if cfg.get("exact_charges", True):
+        import charges
+
+        return multiple * charges.fee("intraday", which, price, qty, day)
     return multiple * (cfg["fee_flat_inr"] + price * qty * cfg["fee_bps"] / 10_000)
+
+
+def _walk(
+    rows: list[dict],
+    index: int,
+    entry: float,
+    stop: float,
+    qty: int,
+    cfg: dict,
+    multiple: float,
+    day: dict,
+) -> tuple[float, str, float]:
+    """The desk's exits from the bar after ``index``: square-off, time stop, managed stop
+    (stop first), target. Returns the exit price after slippage, why, and net rupees."""
+    times = day["times"]
+    slip = multiple * cfg["slippage_bps"] / 10_000
+    target = entry + (entry - stop) * cfg["target_r"]
+    entry_fee = _fee(entry, qty, cfg, multiple, "buy", day["date"])
+    per_share = 2 * entry_fee / qty
+    exit_price, why = None, "session end"
+    for later in range(index + 1, len(rows)):
+        bar = rows[later]
+        if bar["t"] >= times["flat_by"]:
+            exit_price, why = bar["open"], "square_off"
+            break
+        managed = strategies.managed_stop(entry, stop, per_share, rows[index + 1 : later])
+        if managed["time_stop"]:
+            exit_price, why = bar["open"], "time_stop"
+            break
+        if bar["low"] <= managed["stop"]:
+            exit_price, why = min(managed["stop"], bar["open"]), managed["rule"] + "_stop"
+            break
+        if bar["high"] >= target:
+            exit_price, why = target, "target"
+            break
+    if exit_price is None:
+        exit_price = rows[-1]["close"]
+    exit_price *= 1 - slip
+    pnl = (
+        (exit_price - entry) * qty
+        - entry_fee
+        - _fee(exit_price, qty, cfg, multiple, "sell", day["date"])
+    )
+    return exit_price, why, pnl
+
+
+def random_twins(
+    trades: list[dict],
+    data: dict[str, list[dict]],
+    cfg: dict,
+    multiple: float,
+    twins: int,
+    seed: int = 19,
+) -> list[float]:
+    """Net totals of ``twins`` random-entry copies of ``trades``: same stocks, same stop
+    distance and exits, entries at a random bar of a random stored session."""
+    import random
+
+    rng = random.Random(seed)
+    totals = []
+    for _ in range(twins):
+        total = 0.0
+        for trade in trades:
+            days = data.get(trade["symbol"]) or []
+            if not days:
+                continue
+            day = rng.choice(days)
+            rows, times = day["bars"], day["times"]
+            choices = [
+                i
+                for i in range(3, len(rows) - 1)
+                if rows[i]["t"] + strategies.BAR <= times["entry_cutoff"]
+            ]
+            if not choices:
+                continue
+            index = rng.choice(choices)
+            slip = multiple * cfg["slippage_bps"] / 10_000
+            entry = rows[index + 1]["open"] * (1 + slip)
+            risk_pct = (trade["entry"] - trade["stop"]) / trade["entry"]
+            stop = entry * (1 - risk_pct)
+            qty = math.floor(min(cfg["risk_inr"] / (entry - stop), cfg["position_cap_inr"] / entry))
+            if qty < 1:
+                continue
+            total += _walk(rows, index, entry, stop, qty, cfg, multiple, day)[2]
+        totals.append(round(total, 2))
+    return totals
 
 
 def simulate_day(
@@ -101,29 +199,7 @@ def simulate_day(
         qty = math.floor(min(cfg["risk_inr"] / (entry - stop), cfg["position_cap_inr"] / entry))
         if qty < 1:
             continue
-        target = entry + (entry - stop) * cfg["target_r"]
-        entry_fee = _fee(entry, qty, cfg, multiple)
-        per_share = 2 * entry_fee / qty
-        exit_price, why = None, "session end"
-        for later in range(index + 1, len(rows)):
-            bar = rows[later]
-            if bar["t"] >= times["flat_by"]:
-                exit_price, why = bar["open"], "square_off"
-                break
-            managed = strategies.managed_stop(entry, stop, per_share, rows[index + 1 : later])
-            if managed["time_stop"]:
-                exit_price, why = bar["open"], "time_stop"
-                break
-            if bar["low"] <= managed["stop"]:
-                exit_price, why = min(managed["stop"], bar["open"]), managed["rule"] + "_stop"
-                break
-            if bar["high"] >= target:
-                exit_price, why = target, "target"
-                break
-        if exit_price is None:
-            exit_price = rows[-1]["close"]
-        exit_price *= 1 - slip
-        pnl = (exit_price - entry) * qty - entry_fee - _fee(exit_price, qty, cfg, multiple)
+        exit_price, why, pnl = _walk(rows, index, entry, stop, qty, cfg, multiple, day)
         return {
             "symbol": symbol,
             "date": day["date"],
@@ -220,6 +296,8 @@ def run(history: Path, cfg: dict | None = None, rules: dict | None = None) -> di
                 contexts[(symbol, day["date"])] = None
     dates = sorted({day["date"] for days in data.values() for day in days})
     usable = [d for d in dates if any(contexts.get((s, d)) for s in data)]
+    measured: list[dict] = []
+    known = regime.labels(history.parent / "scan.sqlite")
     result: dict[str, Any] = {
         "as_of": dt.datetime.now(IST).isoformat(),
         "sessions": len(usable),
@@ -244,7 +322,29 @@ def run(history: Path, cfg: dict | None = None, rules: dict | None = None) -> di
                         trades.append(trade)
             runs[label] = trades
         eligible, reasons, folds = judge(runs["doubled_costs"], usable, rules)
+        doubled = runs["doubled_costs"]
+        twins = random_twins(doubled, data, cfg, 2.0, int(rules["luck_twins"])) if doubled else []
+        luck = (
+            validation.percentile_beaten(sum(t["net_inr"] for t in doubled), twins)
+            if twins
+            else 0.0
+        )
+        if doubled and luck < float(rules["min_luck_percentile"]):
+            reasons.append(
+                f"beat only {luck:.0f}% of random-entry twins; needs {rules['min_luck_percentile']:g}%"
+            )
+        returns = [t["r"] for t in doubled]
+        variant = validation.variant_id(
+            "intraday", name, {k: cfg[k] for k in sorted(cfg) if k != "exact_charges"}
+        )
+        measured.append({"id": variant, "strategy": name, "sharpe": validation.sharpe(returns)})
+        deflation = {"returns": returns}
+        eligible = not reasons
         result["strategies"][name] = {
+            "by_regime": regime.by_regime(runs["doubled_costs"], known),
+            "luck_percentile": luck,
+            "random_twins_median_inr": statistics.median(twins) if twins else None,
+            "_deflation": deflation,
             "description": strategies.DESCRIPTIONS[name],
             "eligible": eligible,
             "reasons": reasons or ["passed every condition at double costs"],
@@ -257,6 +357,21 @@ def run(history: Path, cfg: dict | None = None, rules: dict | None = None) -> di
             },
             "recent_trades": runs["baseline"][-10:],
         }
+    registry = validation.record_trials(history.parent, "intraday", measured)
+    for _name, row in result["strategies"].items():
+        deflated = validation.deflated_sharpe(
+            row.pop("_deflation")["returns"], registry["trials"], registry["sharpes"]
+        )
+        row["deflated_sharpe"] = deflated
+        if row["eligible"] and (
+            deflated["dsr"] is None or deflated["dsr"] < float(rules["min_dsr"])
+        ):
+            row["eligible"] = False
+            shown = "unknown" if deflated["dsr"] is None else f"{deflated['dsr']:.2f}"
+            row["reasons"] = [
+                f"deflated Sharpe {shown} after {registry['trials']} trials; needs {rules['min_dsr']:g}"
+            ]
+    result["trials"] = registry["trials"]
     result["eligible"] = [n for n, r in result["strategies"].items() if r["eligible"]]
     result["notice"] = (
         "Pessimistic fills on stored history: next-bar-open entries, stop-first on ambiguous "

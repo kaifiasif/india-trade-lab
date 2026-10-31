@@ -107,6 +107,11 @@ def calm_market(directory: Path, at: dt.datetime) -> None:
     (directory / "market-guard.json").write_text(
         json.dumps({"at": at.isoformat(), "india_vix": 13.2, "nifty_move_pct": 0.4, "blocks": []})
     )
+    (directory / "surveillance.json").write_text(
+        json.dumps(
+            {"checked_at": at.isoformat(), "sources": {"indicator": str(at.date())}, "stocks": {}}
+        )
+    )
 
 
 class PipelineTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 {
  "timezone": "Asia/Kolkata",
- "source": "NSE circulars NSE/CMTR/71775 (12 Dec 2025) and NSE/CMTR/72260 (12 Jan 2026): CM segment trading holidays 2026; normal session 09:15-15:30 IST. Muhurat trading (Sun 8 Nov 2026) excluded. Weekends marked closed. Add any special sessions NSE announces later.",
+ "source": "NSE circulars NSE/CMTR/71775 (12 Dec 2025) and NSE/CMTR/72260 (12 Jan 2026): CM segment trading holidays 2026; normal session 09:15-15:30 IST. Muhurat trading (Sun 8 Nov 2026) excluded. Weekends marked closed. Add any special sessions NSE announces later. From 3 Aug 2026 NSE's Closing Auction Session ends continuous trading for F&O stocks at 15:15 (auction 15:15-15:35), so intraday square-off is 15:05 from that date. Muhurat trading (Sun 8 Nov 2026, 14:20-15:15 for CAS stocks) is left closed: the desk sits it out.",
  "sessions": {
   "2026-04-01": {
    "open": "09:15",
@@ -545,31 +545,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-04": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-05": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-06": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-07": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-08": null,
   "2026-08-09": null,
@@ -577,31 +577,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-11": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-12": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-13": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-14": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-15": null,
   "2026-08-16": null,
@@ -609,31 +609,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-18": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-19": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-20": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-21": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-22": null,
   "2026-08-23": null,
@@ -641,31 +641,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-25": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-26": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-27": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-28": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-08-29": null,
   "2026-08-30": null,
@@ -673,31 +673,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-01": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-02": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-03": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-04": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-05": null,
   "2026-09-06": null,
@@ -705,31 +705,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-08": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-09": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-10": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-11": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-12": null,
   "2026-09-13": null,
@@ -738,25 +738,25 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-16": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-17": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-18": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-19": null,
   "2026-09-20": null,
@@ -764,31 +764,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-22": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-23": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-24": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-25": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-26": null,
   "2026-09-27": null,
@@ -796,25 +796,25 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-29": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-09-30": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-01": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-02": null,
   "2026-10-03": null,
@@ -823,31 +823,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-06": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-07": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-08": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-09": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-10": null,
   "2026-10-11": null,
@@ -855,31 +855,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-13": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-14": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-15": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-16": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-17": null,
   "2026-10-18": null,
@@ -887,26 +887,26 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-20": null,
   "2026-10-21": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-22": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-23": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-24": null,
   "2026-10-25": null,
@@ -914,31 +914,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-27": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-28": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-29": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-30": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-10-31": null,
   "2026-11-01": null,
@@ -946,31 +946,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-03": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-04": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-05": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-06": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-07": null,
   "2026-11-08": null,
@@ -978,26 +978,26 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-10": null,
   "2026-11-11": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-12": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-13": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-14": null,
   "2026-11-15": null,
@@ -1005,31 +1005,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-17": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-18": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-19": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-20": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-21": null,
   "2026-11-22": null,
@@ -1037,26 +1037,26 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-24": null,
   "2026-11-25": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-26": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-27": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-11-28": null,
   "2026-11-29": null,
@@ -1064,31 +1064,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-01": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-02": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-03": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-04": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-05": null,
   "2026-12-06": null,
@@ -1096,31 +1096,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-08": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-09": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-10": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-11": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-12": null,
   "2026-12-13": null,
@@ -1128,31 +1128,31 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-15": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-16": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-17": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-18": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-19": null,
   "2026-12-20": null,
@@ -1160,25 +1160,25 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-22": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-23": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-24": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-25": null,
   "2026-12-26": null,
@@ -1187,25 +1187,25 @@
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-29": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-30": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   },
   "2026-12-31": {
    "open": "09:15",
    "close": "15:30",
    "entry_cutoff": "14:30",
-   "flat_by": "15:15"
+   "flat_by": "15:05"
   }
  }
 }

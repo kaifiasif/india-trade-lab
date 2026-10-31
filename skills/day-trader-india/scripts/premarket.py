@@ -346,6 +346,7 @@ def scan_inputs(coordinator: Any, clock: dt.datetime) -> dict | None:
                 "setups": row.get("setups", []),
                 "insiders": row.get("insiders"),
                 "results": row.get("results"),
+                "caution": row.get("caution", []),
                 "scan_parts": [
                     part
                     for part in row["score"]["parts"]

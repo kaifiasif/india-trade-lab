@@ -52,8 +52,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import charges
 import intraday
+import portfolio
 import safety
+import surveillance
+import validation
 
 DEFAULT_CONFIG = Path("data/observatory/pipeline.json")
 IST = intraday.IST
@@ -238,14 +242,91 @@ def signal(bars: list[dict], names: list[str], cfg: dict, min_turnover: float) -
 # ---------- tournament ----------
 
 
+def swing_walk(
+    bars: list[dict], index: int, entry: float, stop: float, qty: int, cfg: dict, multiple: float
+) -> tuple[float, str, int, float]:
+    """The swing exits from the session after ``index``: gap stop, stop (first), target,
+    breakeven and trail at the close, time exit. Returns exit price, why, last index, net."""
+    import charges
+
+    slip = multiple * float(cfg["slippage_bps"]) / 10_000
+    hold, target_r = int(cfg["max_hold_days"]), float(cfg["target_r"])
+    risk = entry - stop
+    target = entry + target_r * risk
+    entry_day = bars[index + 1]["date"]
+    per_share = (
+        multiple
+        * (
+            charges.fee("delivery", "buy", entry, qty, entry_day)
+            + charges.fee("delivery", "sell", entry, qty, entry_day)
+        )
+        / qty
+    )
+    current, exit_price, why, last = stop, None, "time", index + 1
+    for day in range(hold):
+        last = index + 1 + day
+        if last >= len(bars):
+            last = len(bars) - 1
+            break
+        bar = bars[last]
+        if day and bar["open"] <= current:
+            exit_price, why = bar["open"], "gap stop"
+            break
+        if bar["low"] <= current:
+            exit_price, why = current, "stop" if current == stop else "trailing stop"
+            break
+        if bar["high"] >= target:
+            exit_price, why = (max(target, bar["open"]) if day else target), "target"
+            break
+        gained = (bar["close"] - entry) / risk
+        if gained >= 1:
+            current = max(current, entry + per_share)
+        if gained >= 1.5 and last >= 1:
+            current = max(current, min(bar["low"], bars[last - 1]["low"]))
+    if exit_price is None:
+        exit_price = bars[last]["close"]
+    exit_price *= 1 - slip
+    net = (
+        (exit_price - entry) * qty
+        - multiple * charges.fee("delivery", "buy", entry, qty, entry_day)
+        - multiple * charges.fee("delivery", "sell", exit_price, qty, bars[last]["date"])
+    )
+    return exit_price, why, last, net
+
+
+def random_twins(trades: list[dict], data: dict[str, list[dict]], cfg: dict, multiple: float,
+                 twins: int, seed: int = 19) -> list[float]:  # fmt: skip
+    """Net totals of random-entry copies: same stocks, same stop distance and exits."""
+    import random
+
+    rng = random.Random(seed)
+    slip = multiple * float(cfg["slippage_bps"]) / 10_000
+    totals = []
+    for _ in range(twins):
+        total = 0.0
+        for trade in trades:
+            bars = data.get(trade["symbol"]) or []
+            if len(bars) <= MIN_BARS + 1:
+                continue
+            index = rng.randrange(MIN_BARS - 1, len(bars) - 1)
+            entry = bars[index + 1]["open"] * (1 + slip)
+            stop = entry * (1 - (trade["entry"] - trade["stop"]) / trade["entry"])
+            qty = math.floor(
+                min(
+                    TOURNAMENT_SIZING["risk_inr"] / (entry - stop),
+                    TOURNAMENT_SIZING["position_cap_inr"] / entry,
+                )
+            )
+            if qty < 1:
+                continue
+            total += swing_walk(bars, index, entry, stop, qty, cfg, multiple)[3]
+        totals.append(round(total, 2))
+    return totals
+
+
 def simulate(symbol: str, bars: list[dict], name: str, cfg: dict, multiple: float) -> list[dict]:
     """Every trade one setup would have taken on one stock, one at a time, pessimistically."""
     slip = multiple * float(cfg["slippage_bps"]) / 10_000
-    fee_rate = float(cfg["fee_bps"]) / 10_000
-    hold, target_r = int(cfg["max_hold_days"]), float(cfg["target_r"])
-
-    def fee(price: float, qty: int) -> float:
-        return multiple * (float(cfg["fee_flat_inr"]) + price * qty * fee_rate)
 
     trades, index = [], MIN_BARS - 1
     while index < len(bars) - 1:
@@ -268,33 +349,7 @@ def simulate(symbol: str, bars: list[dict], name: str, cfg: dict, multiple: floa
         if risk <= 0 or qty < 1:
             index += 1
             continue
-        target = entry + target_r * risk
-        per_share = 2 * fee(entry, qty) / qty
-        current, exit_price, why, last = stop, None, "time", index + 1
-        for day in range(hold):
-            last = index + 1 + day
-            if last >= len(bars):
-                last = len(bars) - 1
-                break
-            bar = bars[last]
-            if day and bar["open"] <= current:
-                exit_price, why = bar["open"], "gap stop"
-                break
-            if bar["low"] <= current:
-                exit_price, why = current, "stop" if current == stop else "trailing stop"
-                break
-            if bar["high"] >= target:
-                exit_price, why = (max(target, bar["open"]) if day else target), "target"
-                break
-            gained = (bar["close"] - entry) / risk
-            if gained >= 1:
-                current = max(current, entry + per_share)
-            if gained >= 1.5 and last >= 1:
-                current = max(current, min(bar["low"], bars[last - 1]["low"]))
-        if exit_price is None:
-            exit_price = bars[last]["close"]
-        exit_price *= 1 - slip
-        net = (exit_price - entry) * qty - fee(entry, qty) - fee(exit_price, qty)
+        exit_price, why, last, net = swing_walk(bars, index, entry, stop, qty, cfg, multiple)
         trades.append({
             "symbol": symbol, "strategy": name, "date": session["date"],
             "exit_date": bars[last]["date"], "entry": round(entry, 2), "stop": stop,
@@ -351,15 +406,38 @@ def tournament(config_path: Path, data: dict[str, list[dict]] | None = None) -> 
         "rules": intraday_tournament.RULES,
         "strategies": {},
     }
+    measured: list[dict] = []
+    import regime
+
+    known = regime.labels(folder / "scan.sqlite")
     for name in SETUPS:
         runs = {
             label: [trade for symbol, bars in data.items() for trade in simulate(symbol, bars, name, cfg, multiple)]
             for label, multiple in (("baseline", 1.0), ("doubled_costs", 2.0))
         }  # fmt: skip
-        eligible, reasons, folds = intraday_tournament.judge(
-            runs["doubled_costs"], dates, intraday_tournament.RULES
+        rules = intraday_tournament.RULES
+        eligible, reasons, folds = intraday_tournament.judge(runs["doubled_costs"], dates, rules)
+        doubled = runs["doubled_costs"]
+        twins = random_twins(doubled, data, cfg, 2.0, int(rules["luck_twins"])) if doubled else []
+        luck = (
+            validation.percentile_beaten(sum(t["net_inr"] for t in doubled), twins)
+            if twins
+            else 0.0
         )
+        if doubled and luck < float(rules["min_luck_percentile"]):
+            reasons.append(
+                f"beat only {luck:.0f}% of random-entry twins; needs {rules['min_luck_percentile']:g}%"
+            )
+        returns = [t["r"] for t in doubled]
+        assumptions = {key: cfg[key] for key in ("max_hold_days", "target_r", "max_gap_up_pct", "min_vol_ratio",
+                                                 "slippage_bps")}  # fmt: skip
+        measured.append({"id": validation.variant_id("swing", name, assumptions), "strategy": name,
+                         "sharpe": validation.sharpe(returns), "returns": returns})  # fmt: skip
+        eligible = not reasons
         result["strategies"][name] = {
+            "by_regime": regime.by_regime(doubled, known),
+            "luck_percentile": luck,
+            "random_twins_median_inr": statistics.median(twins) if twins else None,
             "description": DESCRIPTIONS[name],
             "eligible": eligible,
             "reasons": reasons or ["passed every condition at double costs"],
@@ -368,6 +446,20 @@ def tournament(config_path: Path, data: dict[str, list[dict]] | None = None) -> 
             "folds_doubled_costs": folds,
             "recent_trades": sorted(runs["baseline"], key=lambda t: t["date"])[-10:],
         }
+    registry = validation.record_trials(folder, "swing", measured)
+    for row_trials, (_name, row) in zip(measured, result["strategies"].items(), strict=True):
+        deflated = validation.deflated_sharpe(
+            row_trials["returns"], registry["trials"], registry["sharpes"]
+        )
+        row["deflated_sharpe"] = deflated
+        if row["eligible"] and (
+            deflated["dsr"] is None or deflated["dsr"] < float(intraday_tournament.RULES["min_dsr"])
+        ):
+            row["eligible"] = False
+            shown = "unknown" if deflated["dsr"] is None else f"{deflated['dsr']:.2f}"
+            row["reasons"] = [f"deflated Sharpe {shown} after {registry['trials']} trials; needs "
+                              f"{intraday_tournament.RULES['min_dsr']:g}"]  # fmt: skip
+    result["trials"] = registry["trials"]
     result["eligible"] = [name for name, row in result["strategies"].items() if row["eligible"]]
     result["notice"] = (
         "Next-open entries, stop-first on ambiguous days, gap fills at the open, delivery costs "
@@ -479,6 +571,15 @@ def scan(
     except (OSError, ValueError):
         card, proven = None, set()
     events, events_checked, notes = {}, False, []
+    if card and proven:
+        import regime
+
+        kept, regime_notes = regime.filter_allowed(
+            folder, card, sorted(proven), str(today + dt.timedelta(days=1)),
+            intraday.load_config(config_path),
+        )  # fmt: skip
+        proven = set(kept)
+        notes.extend(regime_notes)
     try:
         if events_for is None:
             import market_scan
@@ -577,7 +678,10 @@ def simulate_plan(
     shares = qty or plan_qty(config_path, entry, stop)
     if shares < 1:
         raise ValueError("No whole share fits the swing book's limits for this stop")
-    costs = {key: cfg[key] for key in ("fee_bps", "fee_flat_inr", "slippage_bps")}
+    costs = {
+        **{key: cfg[key] for key in ("fee_bps", "fee_flat_inr", "slippage_bps")},
+        "exact": True,
+    }
     result = swing_machine.for_plan(bars, entry, stop, target, hold, shares, costs, replays)
     result.update(symbol=symbol, entry=entry, stop=stop, target=target)
     return result
@@ -622,7 +726,7 @@ def evidence(
     sources = {
         "cash_equity": "NSE EQ series from Kite's instrument list",
         "instrument_verified": "Kite instrument list for today",
-        "surveillance_clear": "F&O-listed stock; NSE's ASM and GSM frameworks exclude F&O securities",
+        "surveillance_clear": "NSE regulatory indicator file and F&O ban list, read daily (surveillance.json)",
         "price_band_ok": f"Kite quote circuit limits {lower}-{upper}, last {last}",
         "no_material_event": f"NSE event calendar, next {report.get('events_window', 7)} days, "
         f"checked {report.get('events_checked_at', '')[:16]}",
@@ -665,6 +769,8 @@ def enter(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str]
         return {**result, "status": "outside the entry window"}
     if state.get("entries_done") == str(clock.date()):
         return {**result, "status": "already entered today"}
+    if (folder / "HALT_ENTRIES").exists():
+        return {**result, "status": "entries paused (HALT_ENTRIES)"}
     report = _latest_candidates(folder, clock.date())
     state["entries_done"] = str(clock.date())
     if report is None:
@@ -700,6 +806,8 @@ def enter(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str]
             why = "the quote is stale or has no time; no entry on old data"
         elif guard := safety.entry_guard(config_path, clock):
             why = guard
+        elif watched := surveillance.gate(config_path, symbol, clock)[0]:
+            why = watched
         elif other := safety.held_elsewhere(config_path, symbol, "swing"):
             why = other
         elif not opened or not last:
@@ -718,13 +826,25 @@ def enter(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str]
             continue
         ratio = safety.net_reward_risk(
             last, candidate["stop"], candidate["target"], sized["qty"], float(cfg["fee_bps"]),
-            float(cfg["fee_flat_inr"]), float(cfg["slippage_bps"]),
+            float(cfg["fee_flat_inr"]), float(cfg["slippage_bps"]), "delivery",
         )  # fmt: skip
         minimum = float(safety.settings(intraday.load_config(config_path))["min_net_reward_risk"])
         if ratio < minimum:
             result["skipped"][symbol] = (
                 f"reward after costs {ratio:.2f}x the risk; needs {minimum:g}x"
             )
+            continue
+        capped = portfolio.gate(
+            config_path,
+            "swing",
+            symbol,
+            last,
+            candidate["stop"],
+            sized["qty"],
+            candidate["strategy"],
+        )[0]
+        if capped:
+            result["skipped"][symbol] = capped
             continue
         odds = candidate.get("odds") or {}
         if cfg.get("require_positive_odds", True) and odds and odds.get("expected_pnl_inr", 0) <= 0:
@@ -742,8 +862,10 @@ def enter(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str]
             )
             return paper_book.fill(
                 allowed, "buy", f"swing:{clock.date()}:{candidate['symbol']}", candidate["symbol"],
-                str(last), clock.isoformat(), "kite:quote", str(sized["fee_inr"]), costs["slippage_bps"],
-                sized["qty"], str(candidate["stop"]), str(sized["exit_fee_reserve_inr"]), now=clock,
+                str(last), clock.isoformat(), "kite:quote",
+                f"{charges.fee('delivery', 'buy', last, sized['qty']):.2f}", costs["slippage_bps"],
+                sized["qty"], str(candidate["stop"]),
+                f"{charges.fee('delivery', 'sell', last, sized['qty']):.2f}", now=clock,
                 evidence=proof, target=str(candidate["target"]),
                 research_meta={"strategy_version": candidate["strategy"], "patterns": [candidate["strategy"]],
                                "execution_kind": "swing_autopilot"},
@@ -796,7 +918,6 @@ def manage(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str
         return {**result, "status": "no open swing positions"}
     quotes = quotes_for(held)
     end_of_day = (clock.hour, clock.minute) >= EXIT_HOUR
-    costs = cfg["fee_flat_inr"], cfg["fee_bps"]
     for symbol in held:
         quote = quotes.get(symbol) or {}
         last = float(quote.get("last_price") or 0)
@@ -824,7 +945,7 @@ def manage(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str
             why = f"time exit after {held_for} sessions"
         if why:
             qty = book["positions"][symbol]["qty"]
-            fee = float(costs[0]) + last * qty * float(costs[1]) / 10_000
+            fee = charges.fee("delivery", "sell", last, qty)  # STT, DP charge and the rest.
 
             def sell(current: dict, symbol=symbol, last=last, fee=fee) -> dict:
                 return paper_book.fill(

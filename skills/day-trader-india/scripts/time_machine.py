@@ -273,9 +273,20 @@ def verdict(mc: dict, target_r: float) -> dict[str, Any]:
 def cost_in_r(plan: dict, config: dict, qty: int) -> float:
     """Round-trip fees and slippage, in units of the plan's risk."""
     entry, risk = plan["entry"], plan["risk_per_share"]
-    bps = float(config.get("fee_bps", 5)) + float(config.get("slippage_bps", 5))
-    per_share = 2 * entry * bps / 10_000 + 2 * float(config.get("fee_flat_inr", 10)) / max(qty, 1)
-    return round(per_share / risk, 3)
+    qty = max(qty, 1)
+    slippage = 2 * entry * float(config.get("slippage_bps", 5)) / 10_000
+    if config.get("exact_charges", True):
+        import charges
+
+        fees = charges.fee("intraday", "buy", entry, qty) + charges.fee(
+            "intraday", "sell", entry, qty
+        )
+        return round((fees / qty + slippage) / risk, 3)
+    per_share = (
+        2 * entry * float(config.get("fee_bps", 5)) / 10_000
+        + 2 * float(config.get("fee_flat_inr", 10)) / qty
+    )
+    return round((per_share + slippage) / risk, 3)
 
 
 def planned_qty(plan: dict, config_path: Path) -> int:

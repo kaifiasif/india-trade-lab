@@ -27,6 +27,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import charges
 import intraday
 
 DEFAULT_CONFIG = Path("data/observatory/pipeline.json")
@@ -138,18 +139,26 @@ def net_reward_risk(
     fee_bps: float,
     fee_flat: float,
     slip_bps: float,
+    kind: str | None = None,
 ) -> float:
-    """Reward at the target over loss at the stop, both after round-trip fees and slippage."""
+    """Reward at the target over loss at the stop, both after round-trip fees and slippage.
+
+    With ``kind`` (intraday or delivery) the exact charges are used; otherwise the flat model.
+    """
     if qty < 1 or not stop < entry < target:
         return 0.0
 
-    def fee(price: float) -> float:
+    def fee(price: float, which: str = "buy") -> float:
+        if kind:
+            import charges
+
+            return charges.fee(kind, which, price, qty)
         return fee_flat + price * qty * fee_bps / 10_000
 
     slip = slip_bps / 10_000
     bought = entry * (1 + slip)
-    reward = (target * (1 - slip) - bought) * qty - fee(bought) - fee(target)
-    loss = (bought - stop * (1 - slip)) * qty + fee(bought) + fee(stop)
+    reward = (target * (1 - slip) - bought) * qty - fee(bought, "buy") - fee(target, "sell")
+    loss = (bought - stop * (1 - slip)) * qty + fee(bought, "buy") + fee(stop, "sell")
     return round(reward / loss, 3) if loss > 0 else 0.0
 
 
@@ -186,10 +195,6 @@ def square_off(
     if not due:
         return {**result, "status": "not yet"}
     quotes = quotes_for(list(due))
-    fee_bps, fee_flat = (
-        Decimal(str(config.get("fee_bps", "5"))),
-        Decimal(str(config.get("fee_flat_inr", "10"))),
-    )
     for symbol, why in due.items():
         quote = quotes.get(symbol) or {}
         bid = (((quote.get("depth") or {}).get("buy") or [{}])[0]).get("price") or quote.get(
@@ -208,7 +213,7 @@ def square_off(
                 if held is None:
                     conn.execute("ROLLBACK")
                     continue
-                fee = fee_flat + price * held["qty"] * fee_bps / 10_000
+                fee = Decimal(str(charges.fee("intraday", "sell", float(price), held["qty"])))
                 state = paper_book.fill(
                     state, "sell", f"squareoff:{today}:{symbol}", symbol, str(price),
                     clock.isoformat(), "kite:quote", f"{fee:.2f}", str(config.get("slippage_bps", "5")),

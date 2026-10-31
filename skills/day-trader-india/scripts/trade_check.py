@@ -182,7 +182,7 @@ def review(
         ratio = safety.net_reward_risk(
             entry, stop, target, sized_preview(plan, book, config, entry, day),
             float(config.get("fee_bps", 5)), float(config.get("fee_flat_inr", 10)),
-            float(config.get("slippage_bps", 5)),
+            float(config.get("slippage_bps", 5)), "intraday",
         )  # fmt: skip
         minimum = float(safety.settings(config)["min_net_reward_risk"])
         if ratio < minimum:
@@ -263,10 +263,26 @@ def main(argv: list[str] | None = None) -> int:
             plan, book, config, clock, times, args.price, seen,
             _cooldowns(args.config, config, clock),
         )  # fmt: skip
+        import portfolio
         import safety
+        import surveillance
 
-        for extra in (safety.entry_guard(args.config, clock),
-                      safety.held_elsewhere(args.config, plan["symbol"], "intraday")):  # fmt: skip
+        for extra in (
+            safety.entry_guard(args.config, clock),
+            surveillance.gate(args.config, plan["symbol"], clock)[0],
+            safety.held_elsewhere(args.config, plan["symbol"], "intraday"),
+            portfolio.gate(
+                args.config,
+                "intraday",
+                plan["symbol"],
+                float(plan.get("entry") or 0),
+                float(plan.get("stop") or 0),
+                int(result.get("qty") or 0),
+                plan.get("strategy"),
+            )[0]
+            if result.get("qty")
+            else "",
+        ):
             if extra:
                 result["blocks"].append(extra)
                 result["verdict"] = "BLOCK"

@@ -18,7 +18,7 @@ The stop rounds down to 5 paise; the target is the entry plus R times the risk
 (``target_r`` from pipeline.json, 2 by default), or ``price:X``. It refuses a stop
 at or above the entry, a target at or below it, a stop under 0.15% away (noise
 would hit it, the desk's own floor), and an entry at or after the entry cutoff.
-Square-off is the session's ``flat_by`` (15:15 on a normal day): no overnight hold.
+Square-off is the session's ``flat_by`` (15:05 from 3 Aug 2026, when the closing auction starts at 15:15): no overnight hold.
 
 A stop is a plan, not a guarantee: a gap or a fast market can fill past it.
 

@@ -154,7 +154,9 @@ class ExitPlannerTests(unittest.TestCase):
         middle = exit_planner.plan("NSE:DEMO", 102.6, at("09:45"), times_for(), "or-mid", "1R",
                                    {"high": 102.0, "low": 100.03})  # fmt: skip
         self.assertEqual(middle["stop"], 101.0)  # 101.015 rounded down to 5 paise.
-        self.assertEqual(plan["flat_by"], at("15:15").isoformat())
+        self.assertEqual(
+            plan["flat_by"], at("15:05").isoformat()
+        )  # Closing auction from 3 Aug 2026.
 
     def test_refusals(self):
         with self.assertRaises(ValueError):  # Under 0.15% away.

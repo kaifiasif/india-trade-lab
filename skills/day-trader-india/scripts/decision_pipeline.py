@@ -116,6 +116,27 @@ OPTIONAL_CONFIG = {
     # The trade desk agent runs the Entry Timer, Exit Planner, Time Machine, trade check
     # and Price Alerts on every session tick, for each of today's picks.
     "trade_desk": {"enabled": True},
+    # Where the watchdog sends problems: Telegram (bot token kept in the secret store) or email.
+    "notify": {"telegram_chat_id": ""},
+    # Backups of journals and settings: encrypted with BACKUP_PASSPHRASE when it is saved.
+    "backup": {"keep": 14, "copy_to": ""},
+    # NSE surveillance and F&O ban gate: GSM, long-term ASM, ESM and similar block entries;
+    # unread lists block too unless unknown_blocks is false.
+    "surveillance": {"enabled": True, "unknown_blocks": True},
+    # Market regime (Nifty trend x India VIX band): a strategy that lost on average in
+    # today's regime over at least min_trades past trades sits out. Remove-only.
+    "regime": {"enabled": True, "min_trades": 20},
+    # Portfolio caps across both paper books: total open risk (heat) as % of combined
+    # capital, positions per sector, correlation with held stocks, quarter-Kelly ceiling.
+    "portfolio": {
+        "enabled": True,
+        "max_heat_pct": 5.0,
+        "max_per_sector": 2,
+        "max_correlation": 0.7,
+        "correlation_days": 60,
+        "kelly_fraction": 0.25,
+        "kelly_min_trades": 100,
+    },
     # Desk-wide safety rules for both books: market-conditions guard, reward after costs,
     # automatic intraday square-off. They can only stop or close trades.
     "safety": {
@@ -174,7 +195,8 @@ OPTIONAL_CONFIG = {
 }
 NESTED_DEFAULTS = (
     "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
-    "openrouter", "trade_desk", "timemachine", "alerts", "swing", "safety",
+    "openrouter", "trade_desk", "timemachine", "alerts", "swing", "safety", "surveillance", "notify", "backup",
+    "regime", "portfolio",
 )  # fmt: skip
 
 DEFAULT_CONFIG = {
@@ -459,6 +481,53 @@ class DailyCoordinator:
             raise ValueError(
                 "swing needs a separate .sqlite book, 1-20 hold days, 1-3 new trades a day, a "
                 "1-20 day event window, volume ratio 1-10, gap 0-10%, target 1-5R and sane costs"
+            )
+        if any(type(value) is not bool for value in cfg["surveillance"].values()):
+            raise ValueError("surveillance switches must be true or false")
+        if (
+            type(cfg["regime"]["enabled"]) is not bool
+            or type(cfg["regime"]["min_trades"]) is not int
+            or not 5 <= cfg["regime"]["min_trades"] <= 500
+        ):
+            raise ValueError("regime.enabled must be true or false and min_trades 5-500")
+        book_caps = cfg["portfolio"]
+        if (
+            type(book_caps["enabled"]) is not bool
+            or not all(
+                type(book_caps[key]) in (int, float)
+                for key in ("max_heat_pct", "max_correlation", "kelly_fraction")
+            )
+            or not 0.5 <= book_caps["max_heat_pct"] <= 20
+            or not 0.3 <= book_caps["max_correlation"] <= 1
+            or not 0.05 <= book_caps["kelly_fraction"] <= 0.5
+            or any(
+                type(book_caps[key]) is not int
+                for key in ("max_per_sector", "correlation_days", "kelly_min_trades")
+            )
+            or not 1 <= book_caps["max_per_sector"] <= 10
+            or not 20 <= book_caps["correlation_days"] <= 250
+            or not 30 <= book_caps["kelly_min_trades"] <= 10_000
+        ):
+            raise ValueError(
+                "portfolio needs heat 0.5-20%, 1-10 per sector, correlation 0.3-1 over 20-250 "
+                "days, a Kelly fraction 0.05-0.5 and at least 30 trades for Kelly"
+            )
+        chat = cfg["notify"]["telegram_chat_id"]
+        if not isinstance(chat, str) or (chat and not re.fullmatch(r"-?\d{1,20}", chat)):
+            raise ValueError("notify.telegram_chat_id must be a Telegram chat ID (digits)")
+        backup = cfg["backup"]
+        if (
+            type(backup["keep"]) is not int
+            or not 1 <= backup["keep"] <= 90
+            or not isinstance(backup["copy_to"], str)
+            or len(backup["copy_to"]) > 300
+            or (
+                backup["copy_to"]
+                and not re.fullmatch(r"(/[\w.\- /]+|[A-Za-z0-9_-]+:[\w.\- /]*)", backup["copy_to"])
+            )
+        ):
+            raise ValueError(
+                "backup.keep must be 1-90 and copy_to an absolute folder or an rclone remote:path"
             )
         rules = cfg["safety"]
         if (

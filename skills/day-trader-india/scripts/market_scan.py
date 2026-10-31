@@ -602,6 +602,8 @@ def filter_kind(reason: str) -> str:
     ):
         if needle in reason:
             return kind
+    if "surveillance" in reason:
+        return "exchange surveillance"
     return "event today or tomorrow"
 
 
@@ -722,6 +724,15 @@ def overnight(
             )
         except (ValueError, json.JSONDecodeError) as exc:
             notes.append(f"insider-trading filings unavailable ({str(exc)[:80]})")
+    try:
+        import surveillance
+
+        watchlist = surveillance.fetch(config_path, clock, fetch)
+        if "indicator" not in watchlist["sources"]:
+            notes.append("NSE surveillance file unavailable; entries wait until it is read")
+    except (ValueError, OSError) as exc:
+        watchlist = {}
+        notes.append(f"surveillance lists unavailable ({str(exc)[:80]})")
     reference = ReferenceStore(coordinator.path("reference_db"))
     snapshot: dict[str, dict] = {}
     results = []
@@ -764,6 +775,10 @@ def overnight(
             "events": events.get(name, []),
         }
         row["filters"] = overnight_filters(row, settings, today)
+        watched = (watchlist.get("stocks") or {}).get(item["symbol"]) or {}
+        if watched.get("block"):
+            row["filters"].append("under exchange surveillance: " + ", ".join(watched["block"]))
+        row["caution"] = watched.get("caution", [])
         if settings["insiders"]:
             import insider_tracker
 
@@ -996,11 +1011,19 @@ def main(argv: list[str] | None = None) -> int:
             coordinator = DailyCoordinator(args.config)
             today = dt.datetime.now(IST).date()
             folder = coordinator.config_path.parent
-            universe = fno_universe(
-                load_dump(folder, today, lambda: make_universe.fetch_kite_dump()), today
-            )
-            summary = refresh_daily(ScanStore(folder / "scan.sqlite"), KiteClient(), universe,
+            dump = load_dump(folder, today, lambda: make_universe.fetch_kite_dump())
+            universe = fno_universe(dump, today)
+            client = KiteClient()
+            summary = refresh_daily(ScanStore(folder / "scan.sqlite"), client, universe,
                                     today + dt.timedelta(days=1))  # fmt: skip
+            import regime
+
+            try:  # Nifty 50 and India VIX daily candles for the market regime.
+                summary["indices"] = regime.store_indices(
+                    folder / "scan.sqlite", client, dump, today + dt.timedelta(days=1)
+                )
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                summary["indices"] = f"not stored: {str(exc)[:120]}"
     except (ValueError, OSError, KeyError, sqlite3.Error) as exc:
         print("SCAN_BLOCK: " + str(exc)[:300], file=sys.stderr)
         return 2

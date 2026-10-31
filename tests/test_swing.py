@@ -127,10 +127,20 @@ class TournamentTests(unittest.TestCase):
             self.assertEqual(card["eligible"], [])  # One trade proves nothing.
             self.assertIn("only", card["strategies"]["vol-breakout-v1"]["reasons"][0])
             self.assertTrue((Path(temporary) / "swing-scorecard.json").is_file())
+            row = card["strategies"]["vol-breakout-v1"]
+            self.assertIn("luck_percentile", row)  # Compared with random-entry twins.
+            self.assertIn("deflated_sharpe", row)
+            self.assertEqual(card["trials"], len(swing.SETUPS))  # Every variant is counted.
+            self.assertTrue((Path(temporary) / "trials.json").is_file())
 
 
 def calm(folder: Path, at: dt.datetime) -> None:
     (folder / "market-guard.json").write_text(json.dumps({"at": at.isoformat(), "blocks": []}))
+    (folder / "surveillance.json").write_text(
+        json.dumps(
+            {"checked_at": at.isoformat(), "sources": {"indicator": str(at.date())}, "stocks": {}}
+        )
+    )
 
 
 def project(folder: Path) -> Path:
