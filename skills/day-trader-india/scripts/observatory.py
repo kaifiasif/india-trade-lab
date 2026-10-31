@@ -188,6 +188,59 @@ def trade_desk_state(directory: Path) -> dict[str, Any] | None:
     }
 
 
+def performance_state(directory: Path) -> dict[str, Any]:
+    """Performance page and desk health, read only: precomputed files plus cheap live views."""
+    config_path = directory / "pipeline.json"
+    view: dict[str, Any] = {"performance": None, "health": {}}
+
+    def read(name: str) -> Any:
+        path = directory / name
+        if not path.is_file() or path.stat().st_size > 5_000_000:
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    try:
+        view["performance"] = read("performance.json")
+    except (OSError, ValueError):
+        view["performance"] = None
+    health = view["health"]
+    try:
+        watch = read("watchdog-state.json") or {}
+        health["watchdog"] = {
+            "last_check": watch.get("last_check"),
+            "problems": watch.get("open_problems") or [],
+        }
+        report = read("surveillance.json") or {}
+        stocks = report.get("stocks") or {}
+        health["surveillance"] = {
+            "checked_at": report.get("checked_at"), "sources": report.get("sources") or {},
+            "blocked": sorted(symbol for symbol, item in stocks.items() if item.get("block"))[:50],
+            "caution": len(stocks) - sum(bool(item.get("block")) for item in stocks.values()),
+        }  # fmt: skip
+        health["context"] = read("market-context.json")
+        health["paused"] = (directory / "HALT_ENTRIES").exists()
+        backups = (
+            sorted((directory / "backups").glob("backup-*"))
+            if (directory / "backups").is_dir()
+            else []
+        )
+        health["backup"] = {"latest": backups[-1].name if backups else None, "count": len(backups)}
+    except (OSError, ValueError, AttributeError):
+        pass
+    if config_path.is_file():
+        try:
+            import openrouter
+            import portfolio
+            import shadow
+
+            health["portfolio"] = portfolio.view(config_path)
+            health["slippage"] = shadow.calibration(config_path)
+            health["ai_spend"] = openrouter.ledger(directory / "learning.sqlite")
+        except (ValueError, OSError, KeyError, TypeError, sqlite3.Error):
+            pass
+    return view
+
+
 def desk_state(directory: Path) -> dict[str, Any]:
     """Today's desk: the latest pre-market selection and the strategy scorecard, read only."""
     result: dict[str, Any] = {"report": None, "scorecard": None}
@@ -664,6 +717,12 @@ def make_handler(app: Observatory) -> type[BaseHTTPRequestHandler]:
                     self.json_response(200, app.state())
                 except (ValueError, sqlite3.Error, OSError, KeyError):
                     self.json_response(503, {"error": "Journal unavailable; controls are blocked"})
+                return
+            if route == "/api/performance":
+                try:
+                    self.json_response(200, performance_state(app.directory))
+                except (ValueError, sqlite3.Error, OSError, KeyError):
+                    self.json_response(503, {"error": "Performance unavailable"})
                 return
             if route == "/api/session":
                 self.json_response(200, {"token": app.token, "paper_only": True})

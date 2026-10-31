@@ -44,8 +44,8 @@ from your phone.
 | 08:30 | You log in to Kite |
 | 08:40 | Code scans every F&O stock: futures positioning, delivery, large deals, upcoming events |
 | 09:09 | Pre-open gap against the Nifty; agents and the judge pick up to ten from the best 20; picks are emailed |
-| 09:15–15:15 | Picks that pass the 09:31 volume and VWAP check are traded in the paper book; code sizes every trade |
-| 15:15 | Everything is squared off |
+| 09:15–15:05 | Picks that pass the 09:31 volume and VWAP check are traded in the paper book; code sizes every trade |
+| 15:05 | Everything is squared off (before the 15:15 closing auction) |
 | 16:10 | History is saved, strategies are re-tested at double costs, and agents are graded |
 
 If no strategy has made money at double costs on your history, the desk sits
@@ -59,7 +59,12 @@ out and records no trades. That is the safe outcome, not a fault.
 - **Strategies:** an opening-range breakout and a VWAP pullback, with breakeven, trailing and time stops.
 - **Trade desk on a loop:** every few minutes the desk agent runs an entry timer, an exit planner, a time machine (10,000 replays of the rest of the day from the stock's own history), a budget and risk check, and price alerts for each pick. The time machine can veto a paper entry. See [trade-tools.md](skills/day-trader-india/references/trade-tools.md).
 - **Swing desk:** holds of up to five sessions in its own ₹1 lakh paper book, only when volume confirms price (breakouts on 2x volume, pocket pivots, pullbacks on drying volume) and only for setups its tournament proved at double delivery costs. A swing Monte Carlo shows each plan's odds and rupee outcomes by session, and the dashboard lets you replay your own scenarios. See [swing.md](skills/day-trader-india/references/swing.md).
-- **Safety rules:** no entries on stale data, when India VIX or the Nifty is wild, or when reward after costs is under 1.5x the risk. No stock in both books. Stop and target are required before entry, every intraday position is squared off by 15:15, and the desk recovers after a restart. See [safety.md](skills/day-trader-india/references/safety.md).
+- **Safety rules:** no entries on stale data, when India VIX or the Nifty is wild, or when reward after costs is under 1.5x the risk. No stock in both books. Stop and target are required before entry, every intraday position is squared off by 15:05 (15:15 before the closing auction began), and the desk recovers after a restart. See [safety.md](skills/day-trader-india/references/safety.md).
+- **Honest testing:** exact Zerodha charges by date; each strategy must beat 95% of random-entry twins and pass a Deflated Sharpe test that counts every variant ever tried; strategies that lose in today's market regime (Nifty trend and India VIX) sit out.
+- **Exchange reality:** no entries in stocks under NSE surveillance (GSM, ASM, ESM) and caution on the F&O ban list; square-off by 15:05 for the closing auction; Muhurat is skipped.
+- **Portfolio caps:** total open risk, sector, correlation and quarter-Kelly limits across both books.
+- **Runs unattended:** a watchdog messages you on Telegram (or email) when a login, scan or worker is missed, and answers /status, /pause and /resume; nightly encrypted backups with a monthly restore test.
+- **Performance page:** expectancy in R, equity and drawdown, attribution by strategy, regime, weekday and hour, paper-versus-backtest drift, measured slippage, a plain story of each trade and a tax estimate; emailed weekly and monthly. See [robustness.md](skills/day-trader-india/references/robustness.md).
 - **Filings:** the latest quarterly results from NSE's XBRL, and SEBI insider-trading disclosures (promoter and director buying, selling and pledges), read into the morning scan.
 - **Learning:** mistakes become lessons the agents read next morning, and stocks that keep losing sit out for a week.
 - **Smart model routing:** simple jobs go to free models and the judge to a capped paid one. With OpenRouter, the desk chooses the models on its own record.
@@ -77,6 +82,7 @@ out and records no trades. That is the safe outcome, not a fault.
 - [Deploy on Oracle Cloud](docs/deploy-oracle.md) · [Run on your own computer](docs/live-data.md)
 - [Pre-market report](skills/day-trader-india/references/premarket.md) · [Trade tools and the desk agent](skills/day-trader-india/references/trade-tools.md) · [Swing desk](skills/day-trader-india/references/swing.md) · [Strategies and tournament](skills/day-trader-india/references/strategy.md) · [Learning and routing](skills/day-trader-india/references/learning.md)
 - [Paper engine](skills/day-trader-india/references/engine.md) · [Guardrails](skills/day-trader-india/references/guardrails.md) · [Command-line tools](skills/day-trader-india/references/data-and-tools.md)
+- [Robustness, operations and analytics](skills/day-trader-india/references/robustness.md) · [Before any real money: a checklist](docs/path-to-live.md)
 - [Install as skills for Claude, Codex and other agents](docs/installation.md)
 
 ## Contributing

@@ -13,7 +13,7 @@ each desk's entry path. Every rule can only stop or close a trade. Set with
 | Stop first when a candle touches both | Tournament, Time Machine and replay engine | Swing tournament and swing Monte Carlo; a gap through the stop fills at the open |
 | Reward after costs | The journal refuses an entry whose reward at the target, after round-trip costs, is below its loss at the stop. The desks need `min_net_reward_risk` (1.5x) | Same, with delivery costs |
 | Daily loss limit | Realised loss plus open planned loss may not exceed it | Same (it caps total open risk) |
-| Close intraday positions by the deadline | `auto_square_off`: every tick from `flat_by` (15:15), the worker closes every intraday paper position, whatever the autopilot setting | Swing positions are held by design, up to 5 sessions |
+| Close intraday positions by the deadline | `auto_square_off`: every tick from `flat_by` (15:05 from 3 Aug 2026, for the closing auction; 15:15 before), the worker closes every intraday paper position, whatever the autopilot setting | Swing positions are held by design, up to 5 sessions |
 | Recover after a restart | The worker timer catches up after a reboot until 15:45. On its first tick the worker verifies both journals' checksums, closes overdue intraday positions at the first valid quote and writes `recovery.json`. State files are written atomically | Swing tracking is rebuilt from the journal |
 
 A tampered journal (checksum mismatch) is reported and left untouched.

@@ -18,8 +18,19 @@ month with Claude.
 | 09:05–15:50 | Research worker: live Kite quotes and candles, agent reviews and debates; with the autopilot on, it records approved paper entries and exits itself | Yes |
 | 16:10 | Today's completed session saved into history, the strategy tournament re-run, then every agent graded on the day so tomorrow's agents read their lessons | Yes |
 | Always | Dashboard on the server's loopback, reached through an SSH tunnel | No |
+| Every 2 minutes, every day | Watchdog: missed login, scan, report or worker, disk, backups; alerts by Telegram or email | No |
+| 23:30, every day | Backup of journals, learning and settings (encrypted with a passphrase from Setup); restore test on the 1st | No |
 
-Jobs skip themselves on days that are not in `sessions.json`.
+Trading-day jobs skip themselves on days that are not in `sessions.json`.
+
+**Alerts on your phone.** In Setup → Email, create a Telegram bot with @BotFather,
+paste its token and your chat ID, then send a test alert. From your chat, `/status`
+shows the desk, `/pause` stops new paper entries in both desks (exits continue) and
+`/resume` allows them again. Without Telegram the watchdog emails you.
+
+**Backups off the server.** Save a backup passphrase in Setup, and set
+`backup.copy_to` to an rclone `remote:path` (for example Oracle Object Storage) so a
+lost server does not lose the journals. Keep the passphrase somewhere safe.
 
 ## 1. Create the Oracle account
 
@@ -118,7 +129,7 @@ and costs, are under **Settings**.
 To let the agents trade the paper book on their own all session, turn on
 **Settings → Strategies → Autopilot**. Each tick, it records the coordinator's
 approved entry, but only for a stock the pre-market judge picked today. It also
-records every protective exit: stop, target, and the 15:15 square-off. Every
+records every protective exit: stop, target, and the 15:05 square-off. Every
 journal limit still applies: per-trade risk, daily loss, trade count, open
 positions, loss streak and drawdown stop. It uses virtual money only. To stop new
 entries at once, create `data/observatory/HALT_ENTRIES`; exits keep running.

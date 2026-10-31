@@ -248,6 +248,17 @@ guard (India VIX, Nifty move, unread conditions), no stock held in both books,
 stop and target before entry, reward after costs, automatic intraday square-off
 and recovery after a restart. Read [safety.md](references/safety.md).
 
+## Robustness, operations and analytics
+
+Exact versioned charges (`charges.py`), the NSE surveillance and F&O-ban gate
+(`surveillance.py`), the 15:05 square-off for the closing auction, random-entry
+and Deflated Sharpe tests in both tournaments (`validation.py`), regime labels
+(`regime.py`), portfolio caps across both books (`portfolio.py`), shadow-fill
+slippage (`shadow.py`), a watchdog with Telegram `/pause` (`watchdog.py`),
+encrypted backups (`backup.py`), NSE's bhavcopy archive and market context, and
+performance analytics with a tax view (`analytics.py`). All of them can only stop,
+shrink or measure trades. Read [robustness.md](references/robustness.md).
+
 ## Learning from mistakes and model routing
 
 `scripts/learning.py settle` grades every agent's calls each evening against the

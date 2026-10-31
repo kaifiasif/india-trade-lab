@@ -232,3 +232,25 @@ class MonthlyCapTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DashboardTests(unittest.TestCase):
+    def test_the_performance_endpoint_reads_files_and_live_views(self):
+        import observatory
+
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            config = project(folder)
+            journal(folder / "paper.sqlite", [("NSE:INFY", "orb-v1", "2026-10-01T09:40:00+05:30",
+                                               "2026-10-01T11:00:00+05:30", 1500, 1530, 20, 400, 578)])  # fmt: skip
+            (folder / "performance.json").write_text(json.dumps(analytics.report(config)))
+            (folder / "watchdog-state.json").write_text(
+                json.dumps({"open_problems": ["Disk is full."]})
+            )
+            (folder / "HALT_ENTRIES").write_text("paused")
+            view = observatory.performance_state(folder)
+            self.assertEqual(view["performance"]["summary"]["trades"], 1)
+            self.assertEqual(view["health"]["watchdog"]["problems"], ["Disk is full."])
+            self.assertTrue(view["health"]["paused"])
+            self.assertIn("intraday", view["health"]["slippage"])
+            self.assertNotIn("TELEGRAM", json.dumps(view))  # No secret names or values.

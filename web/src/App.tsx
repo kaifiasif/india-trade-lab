@@ -13,6 +13,7 @@ import {
   Moon,
   Settings2,
   Sun,
+  TrendingUp,
   Wrench,
 } from "lucide-react";
 import { get } from "@/lib/api";
@@ -33,6 +34,7 @@ import { AgentsPage } from "@/pages/Agents";
 import { SetupPage } from "@/pages/Setup";
 import { SettingsPage } from "@/pages/Settings";
 import { LearningPage } from "@/pages/Learning";
+import { PerformancePage } from "@/pages/Performance";
 
 const NAV = [
   { id: "today", label: "Today", icon: LayoutDashboard },
@@ -41,6 +43,7 @@ const NAV = [
   { id: "research", label: "Research", icon: FlaskConical },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "learning", label: "Learning", icon: GraduationCap },
+  { id: "performance", label: "Performance", icon: TrendingUp },
   { id: "setup", label: "Setup", icon: Wrench },
   { id: "settings", label: "Settings", icon: Settings2 },
 ] as const;
@@ -135,6 +138,7 @@ export default function App() {
     research: <ResearchPage />,
     agents: <AgentsPage />,
     learning: <LearningPage />,
+    performance: <PerformancePage />,
     setup: <SetupPage />,
     settings: <SettingsPage />,
   }[route] ?? <TodayPage />;
