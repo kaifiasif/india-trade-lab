@@ -51,6 +51,7 @@ DEFAULTS: dict[str, Any] = {
     "max_input_usd_per_mtok": 1.0,
     "max_output_usd_per_mtok": 4.0,
     "max_usd_per_day": 0.5,
+    "max_usd_per_month": 10.0,
     "min_context": 16000,
 }
 # A light starting order only. Measured validity and accuracy quickly outweigh it.
@@ -314,9 +315,44 @@ def failing_today(db_path: Path, role: str) -> set[str]:
 
 
 def spent_today(db_path: Path) -> float:
+    start = dt.datetime.now(dt.timezone.utc).replace(hour=0, minute=0, second=0).isoformat()
+    return spent_since(db_path, start)
+
+
+def spent_this_month(db_path: Path, now: dt.datetime | None = None) -> float:
+    now = (now or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc)
+    return spent_since(
+        db_path, now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    )
+
+
+def ledger(db_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
+    """AI spend for the dashboard: today, this month, and per role this month. Never prompts."""
+    now = (now or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc)
+    month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    roles: dict[str, dict] = {}
+    if db_path.is_file():
+        with _db(db_path) as conn:
+            try:
+                rows = conn.execute(
+                    "SELECT role, COUNT(*), COALESCE(SUM(cost_usd), 0), COALESCE(SUM(input_tokens), 0), "
+                    "COALESCE(SUM(output_tokens), 0) FROM calls WHERE at>=? GROUP BY role",
+                    (month,),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = []
+        roles = {role: {"calls": calls, "usd": round(cost, 4), "input_tokens": inp, "output_tokens": out}
+                 for role, calls, cost, inp, out in rows}  # fmt: skip
+    return {
+        "today_usd": round(spent_today(db_path), 4),
+        "month_usd": round(sum(item["usd"] for item in roles.values()), 4),
+        "by_role": roles,
+    }
+
+
+def spent_since(db_path: Path, start: str) -> float:
     if not db_path.is_file():
         return 0.0
-    start = dt.datetime.now(dt.timezone.utc).replace(hour=0, minute=0, second=0).isoformat()
     with _db(db_path) as conn:
         try:
             row = conn.execute(
@@ -361,6 +397,8 @@ def choose(
     elif choice == "auto:paid":
         if spent_today(db_path) >= options["max_usd_per_day"]:
             return []  # Today's dollar cap is reached: paid models wait until tomorrow.
+        if spent_this_month(db_path) >= options["max_usd_per_month"]:
+            return []  # This month's cap is reached: free models only until the 1st.
         pool = [model for model in candidates if within_caps(model, options)]
     else:
         raise ValueError("Use auto:free or auto:paid")

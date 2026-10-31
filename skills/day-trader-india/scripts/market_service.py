@@ -133,6 +133,12 @@ class MarketService:
             outcome["square_off"] = safety.square_off(path, clock, self.quotes)
         except (ValueError, OSError, KeyError, sqlite3.Error) as exc:
             outcome["square_off"] = {"status": "DATA_BLOCK", "reason": str(exc)[:200]}
+        import shadow
+
+        try:
+            outcome["shadow"] = shadow.settle(path, clock, self.quotes)
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            outcome["shadow"] = {"status": "unavailable", "reason": str(exc)[:160]}
         return outcome
 
     def desk_tick(self) -> dict:

@@ -31,7 +31,7 @@ EDITABLE = {
     "fee_bps", "fee_flat_inr", "slippage_bps",
     "debate", "memory", "selection", "autopilot", "strategy", "market_feeds",
     "learning", "routing", "scan", "openrouter", "trade_desk", "timemachine", "alerts",
-    "swing", "safety", "surveillance", "notify", "backup", "regime", "portfolio",
+    "swing", "safety", "surveillance", "notify", "backup", "regime", "portfolio", "shadow", "tax",
     "min_scored_headlines",
     # Email
     "smtp_host", "smtp_port", "smtp_user", "email_from", "email_to",

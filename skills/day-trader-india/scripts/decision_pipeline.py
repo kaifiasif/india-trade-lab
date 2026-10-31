@@ -126,6 +126,10 @@ OPTIONAL_CONFIG = {
     # Market regime (Nifty trend x India VIX band): a strategy that lost on average in
     # today's regime over at least min_trades past trades sits out. Remove-only.
     "regime": {"enabled": True, "min_trades": 20},
+    # Shadow fills: re-quote each paper fill a minute later to measure real slippage.
+    "shadow": {"enabled": True, "delay_seconds": 60, "max_wait_seconds": 600},
+    # Tax view on the performance page: your income-tax slab for intraday (speculative).
+    "tax": {"slab_rate_pct": 30.0},
     # Portfolio caps across both paper books: total open risk (heat) as % of combined
     # capital, positions per sector, correlation with held stocks, quarter-Kelly ceiling.
     "portfolio": {
@@ -178,6 +182,7 @@ OPTIONAL_CONFIG = {
         "max_input_usd_per_mtok": 1.0,
         "max_output_usd_per_mtok": 4.0,
         "max_usd_per_day": 0.5,
+        "max_usd_per_month": 10.0,
         "min_context": 16000,
     },
     # Smart routing: simple jobs to free tiers, hard ones to the strongest tier allowed,
@@ -196,7 +201,7 @@ OPTIONAL_CONFIG = {
 NESTED_DEFAULTS = (
     "debate", "memory", "selection", "autopilot", "strategy", "learning", "routing", "scan",
     "openrouter", "trade_desk", "timemachine", "alerts", "swing", "safety", "surveillance", "notify", "backup",
-    "regime", "portfolio",
+    "regime", "portfolio", "shadow", "tax",
 )  # fmt: skip
 
 DEFAULT_CONFIG = {
@@ -490,6 +495,17 @@ class DailyCoordinator:
             or not 5 <= cfg["regime"]["min_trades"] <= 500
         ):
             raise ValueError("regime.enabled must be true or false and min_trades 5-500")
+        shadow_cfg, slab = cfg["shadow"], cfg["tax"]["slab_rate_pct"]
+        if (
+            type(shadow_cfg["enabled"]) is not bool
+            or any(
+                type(shadow_cfg[key]) is not int for key in ("delay_seconds", "max_wait_seconds")
+            )
+            or not 15 <= shadow_cfg["delay_seconds"] < shadow_cfg["max_wait_seconds"] <= 3600
+            or type(slab) not in (int, float)
+            or not 0 <= slab <= 45
+        ):
+            raise ValueError("shadow needs a 15-3600 second delay below max_wait; tax slab 0-45%")
         book_caps = cfg["portfolio"]
         if (
             type(book_caps["enabled"]) is not bool
@@ -558,7 +574,12 @@ class DailyCoordinator:
         if (
             any(
                 not isinstance(router_caps[key], (int, float)) or not 0 <= router_caps[key] <= 100
-                for key in ("max_input_usd_per_mtok", "max_output_usd_per_mtok", "max_usd_per_day")
+                for key in (
+                    "max_input_usd_per_mtok",
+                    "max_output_usd_per_mtok",
+                    "max_usd_per_day",
+                    "max_usd_per_month",
+                )  # fmt: skip
             )
             or type(router_caps["min_context"]) is not int
             or not 4000 <= router_caps["min_context"] <= 2_000_000

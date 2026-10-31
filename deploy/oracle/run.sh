@@ -39,6 +39,7 @@ case "$job" in
     # Nightly, every day; the first of the month also proves the newest backup restores.
     python3 scripts/backup.py --config "$CONFIG" run
     if [ "$(date +%d)" = "01" ]; then
+      python3 scripts/analytics.py --config "$CONFIG" report --period month --email || true
       exec python3 scripts/backup.py --config "$CONFIG" restore-test
     fi
     exit 0 ;;
@@ -63,6 +64,11 @@ case "$job" in
       python3 scripts/evidence.py collect --config "$CONFIG" \
         || echo "News collection failed; the report will use previously collected headlines."
     fi
+    # NSE's official end-of-day file for the last sessions, then breadth, FII/DII and regime.
+    python3 scripts/bhavcopy.py --config "$CONFIG" sync --days 5 \
+      || echo "NSE bhavcopy not fetched; breadth will be missing from the market context."
+    python3 scripts/market_context.py --config "$CONFIG" build \
+      || echo "Market context not built; the agents work without it."
     exec python3 scripts/premarket.py --config "$CONFIG" --email --skip-when-scan ;;
   open)
     # 09:09: pre-open gap and strength against the Nifty, then the agents and judge.
@@ -87,8 +93,11 @@ case "$job" in
     # then re-run the strategy tournament so tomorrow trades only what is still proven.
     python3 scripts/data_sync.py --config "$CONFIG" --days 90 --max-symbols 10 \
       || echo "History sync failed; the tournament will use the history already stored."
-    # Fridays: write the week's paper track record, ready to publish.
+    # Performance page (both books), and on Fridays the week's results by email.
+    python3 scripts/analytics.py --config "$CONFIG" report > /dev/null \
+      || echo "Performance analytics not refreshed."
     if [ "$(date +%u)" = "5" ]; then
+      python3 scripts/analytics.py --config "$CONFIG" report --period week --email || true
       mkdir -p "$DATA/reports"
       python3 scripts/itl.py --config "$CONFIG" track --days 7 \
         > "$DATA/reports/track-$(date +%F).md" || true

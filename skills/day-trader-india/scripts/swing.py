@@ -895,6 +895,12 @@ def enter(config_path: Path, clock: dt.datetime, quotes_for: Callable[[list[str]
         result["entered"].append({"symbol": symbol, "qty": held["qty"], "entry": entry,
                                   "stop": candidate["stop"], "target": candidate["target"],
                                   "strategy": candidate["strategy"]})  # fmt: skip
+        import shadow
+
+        try:
+            shadow.record(config_path, "swing", symbol, "buy", float(entry), clock)
+        except (ValueError, OSError, TypeError):
+            pass
     _save_state(config_path, state)
     return {**result, "status": "done"}
 

@@ -335,6 +335,9 @@ def scan_inputs(coordinator: Any, clock: dt.datetime) -> dict | None:
         ) from None
     opened = record.get("stage") == "open"
     rows = record["ranked"] if opened else record["shortlist"]
+    import market_context
+
+    context = market_context.load(folder, clock.date())
     instruments = [
         {
             "symbol": row["symbol"],
@@ -347,6 +350,7 @@ def scan_inputs(coordinator: Any, clock: dt.datetime) -> dict | None:
                 "insiders": row.get("insiders"),
                 "results": row.get("results"),
                 "caution": row.get("caution", []),
+                "market": context,
                 "scan_parts": [
                     part
                     for part in row["score"]["parts"]

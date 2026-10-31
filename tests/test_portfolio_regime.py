@@ -41,7 +41,10 @@ def daily(conn: sqlite3.Connection, table: str, symbol: str, closes: list[float]
                  "low REAL, close REAL, volume REAL, PRIMARY KEY(symbol, date))")  # fmt: skip
     conn.executemany(
         f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?)",
-        [(symbol, day, c, c * 1.01, c * 0.99, c, 1e6) for day, c in zip(days(len(closes)), closes, strict=True)],
+        [
+            (symbol, day, c, c * 1.01, c * 0.99, c, 1e6)
+            for day, c in zip(days(len(closes)), closes, strict=True)
+        ],
     )
 
 
@@ -52,13 +55,20 @@ class PortfolioTests(unittest.TestCase):
         shutil.copy(SESSIONS, self.folder / "sessions.json")
         self.config = self.folder / "pipeline.json"
         self.config.write_text(json.dumps({"sessions": "sessions.json", "book": "paper.sqlite"}))
-        book(self.folder / "paper.sqlite", 100_000, {"NSE:BANKA": held(100, 98, 500)})  # ₹1,000 risk.
+        book(
+            self.folder / "paper.sqlite", 100_000, {"NSE:BANKA": held(100, 98, 500)}
+        )  # ₹1,000 risk.
         book(self.folder / "swing.sqlite", 100_000, {})
         wave = [100 * (1 + 0.02 * math.sin(i / 2) + 0.001 * i) for i in range(70)]
         with sqlite3.connect(self.folder / "scan.sqlite") as conn:
             daily(conn, "daily", "NSE:BANKA", wave)
             daily(conn, "daily", "NSE:BANKB", [value * 2 for value in wave])  # Moves together.
-            daily(conn, "daily", "NSE:PHARMA", [100 * (1 + 0.02 * math.cos(i * 1.7)) for i in range(70)])
+            daily(
+                conn,
+                "daily",
+                "NSE:PHARMA",
+                [100 * (1 + 0.02 * math.cos(i * 1.7)) for i in range(70)],
+            )
         with sqlite3.connect(self.folder / "reference.sqlite") as conn:
             conn.execute("CREATE TABLE reference (symbol TEXT PRIMARY KEY, sector TEXT)")
             conn.executemany("INSERT INTO reference VALUES (?,?)",
@@ -89,10 +99,15 @@ class PortfolioTests(unittest.TestCase):
                                "young-v1": {"doubled_costs": {"trades": 30, "win_rate_pct": 80.0, "profit_factor": 3}}}}  # fmt: skip
         (self.folder / "strategy-scorecard.json").write_text(json.dumps(card))
         # Kelly = 0.5 x (1 - 1/1.25) = 0.10; a quarter of that on ₹1 lakh = ₹2,500.
-        self.assertEqual(portfolio.gate(self.config, "intraday", "NSE:PHARMA", 100, 98, 1000, "orb-v1")[0], "")
+        self.assertEqual(
+            portfolio.gate(self.config, "intraday", "NSE:PHARMA", 100, 98, 1000, "orb-v1")[0], ""
+        )
         reason, _ = portfolio.gate(self.config, "intraday", "NSE:PHARMA", 100, 97, 1000, "orb-v1")
         self.assertIn("quarter-Kelly ceiling ₹2,500", reason)
-        self.assertIn("no edge", portfolio.gate(self.config, "intraday", "NSE:PHARMA", 100, 99, 10, "weak-v1")[0])
+        self.assertIn(
+            "no edge",
+            portfolio.gate(self.config, "intraday", "NSE:PHARMA", 100, 99, 10, "weak-v1")[0],
+        )
         _, notes = portfolio.gate(self.config, "intraday", "NSE:PHARMA", 100, 99, 10, "young-v1")
         self.assertIn("Kelly needs 100", notes[-1])
 

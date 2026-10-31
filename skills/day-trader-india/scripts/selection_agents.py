@@ -345,6 +345,15 @@ def evidence_catalogue(candidate: dict) -> dict[str, dict[str, Any]]:
                 "facts": {"exchange_flags": signals["caution"],
                           "note": "NSE surveillance or F&O ban flags; not blocking, but crowded or watched"},
             }  # fmt: skip
+        if signals.get("market"):
+            market = signals["market"]
+            catalogue[f"{symbol}#market"] = {
+                "roles": ["sector-analyst", "technical-analyst"],
+                "facts": {
+                    key: market[key] for key in ("flows", "breadth", "regime") if key in market
+                }
+                | {"note": "whole-market context from the last session; the same for every stock"},
+            }
         if signals.get("insiders"):
             catalogue[f"{symbol}#insiders"] = {
                 "roles": ["news-analyst", "liquidity-analyst"],

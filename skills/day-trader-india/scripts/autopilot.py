@@ -262,6 +262,14 @@ def apply(coordinator: Any, report: dict, now: dt.datetime | None = None) -> dic
                 entry.update(stop_inr=ticket["stop_inr"], target_inr=ticket["target_inr"])
                 entry["alerts"] = alert_entry(coordinator, symbol, ticket, clock)
             outcome["recorded"].append(entry)
+            if getattr(coordinator, "config_path", None) is not None:
+                import shadow
+
+                try:  # Measure the fill against the market a minute later.
+                    shadow.record(coordinator.config_path, "intraday", symbol, entry["side"],
+                                  float(ticket["price_inr"]), clock)  # fmt: skip
+                except (ValueError, OSError, TypeError):
+                    pass
         except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             outcome["skipped"].append(
                 {
