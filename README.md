@@ -15,7 +15,7 @@ git clone https://github.com/kaifiasif/india-trade-lab.git && cd india-trade-lab
 python3 scripts/observatory.py    # open http://127.0.0.1:8765, then Paper replay → Start replay
 ```
 
-Needs only Python 3.10 or newer. The replay uses a bundled made-up session. To
+Needs Python 3.10 or newer and NumPy (`python3 -m pip install -r requirements.txt`). The replay uses a bundled made-up session. To
 see what the morning report looks like, open the
 [sample report](docs/examples/premarket-sample.html). To meet the agents, read the
 [Meet the Desk guide](docs/guide/agents-guide.pdf).

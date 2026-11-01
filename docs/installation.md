@@ -16,7 +16,8 @@ start a trading service.
 
 ## Download once
 
-Install Python 3.10+ and Git. In your terminal:
+Install Python 3.10+, NumPy (`python3 -m pip install numpy`, or
+`sudo apt-get install python3-numpy`) and Git. In your terminal:
 
 ```bash
 git clone https://github.com/kaifiasif/india-trade-lab.git

@@ -1,0 +1,2 @@
+# Runtime: the standard library plus NumPy, which the Time Machine replays need.
+numpy>=1.24

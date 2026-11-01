@@ -10,8 +10,8 @@ python scripts/check.py
 ```
 
 On Windows, activate with `.venv\Scripts\Activate.ps1` in PowerShell. Runtime
-commands require no pip dependencies. Development checks require the pinned
-tools above.
+commands need only NumPy (`requirements.txt`, for the Time Machine replays).
+Development checks also require the pinned tools in `requirements-dev.txt`.
 
 Follow [engineering and writing standards](skills/india-trade-dev/references/engineering.md).
 Format code with `python -m ruff format .`; apply reviewed lint fixes with

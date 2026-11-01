@@ -631,19 +631,28 @@ class EngineStore:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.saved = 0
-        self.version: str | None = None
+        self.version: int | None = None
+        self.written_book: dict[str, Any] | None = None
+        self.conn: sqlite3.Connection | None = None
+        self.file_id: tuple[int, int] | None = None
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(str(self.path), isolation_level=None, timeout=10)
+        # One connection for the store's life, so PRAGMA data_version reveals any write made
+        # through another connection, at a cost that does not grow with the journal.
+        if self.conn is None:
+            self.conn = sqlite3.connect(
+                str(self.path), isolation_level=None, timeout=10, check_same_thread=False
+            )
+            stat = self.path.stat()
+            self.file_id = (stat.st_dev, stat.st_ino)
+        return self.conn
 
-    @staticmethod
-    def _version(conn: sqlite3.Connection) -> str:
-        payload = [
-            conn.execute("SELECT data FROM book WHERE id=1").fetchone(),
-            conn.execute("SELECT data FROM engine_state WHERE id=1").fetchone(),
-            conn.execute("SELECT MAX(seq) FROM engine_log").fetchone(),
-        ]
-        return hashlib.sha256(json.dumps(payload).encode()).hexdigest()
+    def _version(self, conn: sqlite3.Connection) -> int:
+        """SQLite's counter of commits by other connections, on the file this store opened."""
+        stat = self.path.stat()
+        if (stat.st_dev, stat.st_ino) != self.file_id:
+            raise ValueError("Journal file was replaced since load; refusing stale engine save")
+        return conn.execute("PRAGMA data_version").fetchone()[0]
 
     def create(self, book: dict[str, Any]) -> None:
         if self.path.exists():
@@ -661,6 +670,7 @@ class EngineStore:
             conn.execute("INSERT INTO book VALUES (1, ?)", (json.dumps(book),))
             self.version = self._version(conn)
             conn.commit()
+        self.written_book = book
 
     def save(self, engine: Engine) -> None:
         """Persist journal, snapshot and new log lines in one transaction."""
@@ -672,7 +682,9 @@ class EngineStore:
             conn.execute("BEGIN IMMEDIATE")
             if self.version is None or self._version(conn) != self.version:
                 raise ValueError("Journal changed since load; refusing stale engine save")
-            conn.execute("INSERT OR REPLACE INTO book VALUES (1, ?)", (json.dumps(book),))
+            # paper_book.fill returns a new state, so the same object means no new fill.
+            if book is not self.written_book:
+                conn.execute("INSERT OR REPLACE INTO book VALUES (1, ?)", (json.dumps(book),))
             conn.execute(
                 "INSERT OR REPLACE INTO engine_state VALUES (1, ?)",
                 (json.dumps(engine.snapshot()),),
@@ -681,10 +693,9 @@ class EngineStore:
                 "INSERT INTO engine_log (data) VALUES (?)",
                 [(json.dumps(e, default=str),) for e in new],
             )
-            version = self._version(conn)
-            conn.commit()
-        self.version = version
+            conn.commit()  # Our own commits leave data_version unchanged.
         self.saved = len(engine.log)
+        self.written_book = book
 
     def load(self) -> tuple[dict[str, Any], dict[str, Any] | None]:
         with self._connect() as conn:
@@ -694,6 +705,7 @@ class EngineStore:
             self.version = self._version(conn)
             conn.commit()
         paper_book.verify_state(book)
+        self.written_book = book
         return book, (json.loads(row[0]) if row else None)
 
 

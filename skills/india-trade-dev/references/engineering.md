@@ -2,8 +2,10 @@
 
 ## Code structure
 
-Use Python 3.10+ and the standard library for runtime tools. Keep optional
-development dependencies pinned in `requirements-dev.txt`. Separate input
+Use Python 3.10+ and the standard library for runtime tools; NumPy is the one
+runtime dependency (`requirements.txt`), for the Time Machine's vectorized replays.
+Do not add another without a measured need. Keep development dependencies pinned
+in `requirements-dev.txt`. Separate input
 validation, domain calculations, persistence and CLI orchestration. Use type
 annotations at public function boundaries; represent provider JSON explicitly
 and validate it before treating values as domain data. This project does not

@@ -181,6 +181,34 @@ class TimeMachineTests(unittest.TestCase):
             self.assertLess(first["average_r_after_costs"], mc["average_r"])
             self.assertTrue(time_machine.describe(first).startswith("1,000 replays"))
 
+    def test_exit_rules_are_exact_when_every_replay_is_the_same(self):
+        # One session and a zero window remove the randomness, so each case is exact.
+        plan = {"entry": 100.0, "stop": 99.0, "target": 102.0, "entry_bar": 3}
+        flat = (1.0, 1.0, 1.0, 1.0)
+
+        def run_with(bar_four):
+            session = [flat] * 75
+            session[3] = (1.0, 1.001, 0.999, 1.001)
+            session[4] = bar_four
+            return time_machine.simulate([session], plan, 8, replays=100, window=0)
+
+        target = run_with((1.0, 1.03, 1.0, 1.0))
+        self.assertEqual(target["target_first_pct"], 100.0)
+        self.assertEqual(
+            [step["p50"] for step in target["fan"]], [100.1, 102.0, 102.0, 102.0, 102.0]
+        )
+        self.assertAlmostEqual(target["average_r"], 2.0)
+        gap = run_with((0.97, 0.98, 0.96, 0.97))
+        self.assertEqual(gap["stop_first_pct"], 100.0)
+        self.assertEqual(gap["close_median"], 97.1)  # Gapped below the stop: fills at the open.
+        both = run_with((1.0, 1.03, 0.98, 1.0))
+        self.assertEqual(both["stop_first_pct"], 100.0)  # Touching both counts as the stop.
+        self.assertEqual(both["close_median"], 99.0)
+        neither = run_with(flat)
+        self.assertEqual(neither["neither_pct"], 100.0)
+        self.assertEqual(neither["close_median"], 100.1)
+        self.assertEqual(neither["green_pct"], 100.0)
+
     def test_too_little_history_is_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
             config = project(Path(temporary), history_days=5)

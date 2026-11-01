@@ -11,6 +11,9 @@ with standalone Indian data/research tools. It does not route live orders.
 Read [source-comparison.md](references/source-comparison.md) when comparing
 the projects or explaining what was adapted and what stays US-specific.
 
+Runtime needs Python 3.10+ and NumPy (for the Time Machine replays); everything
+else uses the standard library.
+
 ## Coordinate specialist agents
 
 Read [agent-workflow.md](references/agent-workflow.md) when using the specialist

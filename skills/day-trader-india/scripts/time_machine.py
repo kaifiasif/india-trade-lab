@@ -40,7 +40,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import random
 import sqlite3
 import statistics
 import sys
@@ -48,6 +47,7 @@ from pathlib import Path
 from typing import Any
 
 import intraday
+import numpy as np
 
 DEFAULT_CONFIG = Path("data/observatory/pipeline.json")
 SESSION_BARS = 75  # 09:15-15:30 in five-minute bars.
@@ -94,30 +94,46 @@ def ratios(bars: list[dict]) -> list[tuple[float, float, float, float]]:
     return rows
 
 
-def replay(
-    pool: list[list[tuple]],
+NEITHER, STOP, TARGET = 0, 1, 2
+
+
+def replay_all(
+    pool: np.ndarray,
     entry: float,
     stop: float,
     target: float,
     start: int,
     end: int,
-    rng: random.Random,
+    rng: np.random.Generator,
     window: int,
-) -> tuple[str, float, list[float]]:
-    """One simulated rest-of-session: outcome, exit price and the closes along the way."""
-    price, path = entry, []
-    for index in range(start, end):
+    replays: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Every replay at once, bar by bar: outcome codes, exit prices and the price fan.
+
+    Same rules as one replay: stop before target, a gap below the stop exits at the
+    open, and an exited replay holds its exit price for the rest of the fan.
+    """
+    price = np.full(replays, float(entry))
+    exit_price = price.copy()
+    outcome = np.full(replays, NEITHER, dtype=np.int8)
+    closed = np.zeros(replays, dtype=bool)
+    fan = np.empty((end - start, replays))
+    for step, index in enumerate(range(start, end)):
         low_index = max(0, index - window)
         high_index = min(SESSION_BARS - 1, index + window)
-        o, h, low, c = rng.choice(pool)[rng.randint(low_index, high_index)]
-        bar_open, bar_low, bar_high = price * o, price * low, price * h
-        if bar_low <= stop:
-            return "stop", min(stop, bar_open), path
-        if bar_high >= target:
-            return "target", max(target, bar_open), path
-        price *= c
-        path.append(price)
-    return "neither", price, path
+        bars = pool[
+            rng.integers(0, len(pool), replays), rng.integers(low_index, high_index + 1, replays)
+        ]
+        bar_open = price * bars[:, 0]
+        hit_stop = ~closed & (price * bars[:, 2] <= stop)
+        hit_target = ~closed & ~hit_stop & (price * bars[:, 1] >= target)
+        exit_price[hit_stop] = np.minimum(stop, bar_open[hit_stop])
+        exit_price[hit_target] = np.maximum(target, bar_open[hit_target])
+        outcome[hit_stop], outcome[hit_target] = STOP, TARGET
+        closed |= hit_stop | hit_target
+        price = np.where(closed, price, price * bars[:, 3])
+        fan[step] = np.where(closed, exit_price, price)
+    return outcome, np.where(closed, exit_price, price), fan
 
 
 def percentile(sorted_values: list[float], share: float) -> float:
@@ -146,32 +162,34 @@ def simulate(
     start = int(plan["entry_bar"])
     if not 3 <= start < end <= SESSION_BARS:
         raise ValueError("The entry must be after the opening range and before the square-off")
-    rng = random.Random(seed)
+    outcome, prices, bands = replay_all(
+        np.asarray(pool, dtype=float),
+        entry,
+        stop,
+        target,
+        start,
+        end,
+        np.random.default_rng(seed),
+        window,
+        replays,
+    )
     risk = entry - stop
-    counts = {"target": 0, "stop": 0, "neither": 0}
-    green, r_values, closes = 0, [], []
+    counts = {
+        "target": int(np.sum(outcome == TARGET)),
+        "stop": int(np.sum(outcome == STOP)),
+        "neither": int(np.sum(outcome == NEITHER)),
+    }
+    green = int(np.sum((outcome == TARGET) | ((outcome == NEITHER) & (prices > entry))))
+    r_values = ((prices - entry) / risk).tolist()
+    closes = sorted(prices.tolist())
     steps = end - start
-    bands: list[list[float]] = [[] for _ in range(steps)]
-    for _ in range(replays):
-        outcome, price, path = replay(pool, entry, stop, target, start, end, rng, window)
-        counts[outcome] += 1
-        r_values.append((price - entry) / risk)
-        if outcome == "target" or (outcome == "neither" and price > entry):
-            green += 1
-        closes.append(price)
-        for step in range(steps):
-            # An exited replay holds its exit price for the rest of the fan.
-            bands[step].append(path[step] if step < len(path) else price)
-    closes.sort()
-    fan = []
-    for step, values in enumerate(bands):
-        values.sort()
-        fan.append(
-            {
-                "bar": start + step,
-                **{f"p{int(q * 100)}": round(percentile(values, q), 2) for q in (0.05, 0.25, 0.5, 0.75, 0.95)},
-            }
-        )  # fmt: skip
+    quantiles = (0.05, 0.25, 0.5, 0.75, 0.95)
+    # Same nearest-rank index as percentile(), taken from every sorted step at once.
+    ranks = [min(replays - 1, max(0, round(q * (replays - 1)))) for q in quantiles]
+    fan = [
+        {"bar": start + step, **{f"p{int(q * 100)}": round(value, 2) for q, value in zip(quantiles, row, strict=True)}}
+        for step, row in enumerate(np.sort(bands, axis=1)[:, ranks].tolist())
+    ]  # fmt: skip
     share = {key: round(100 * value / replays, 1) for key, value in counts.items()}
     return {
         "replays": replays,

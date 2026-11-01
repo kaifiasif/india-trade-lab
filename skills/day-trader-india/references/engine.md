@@ -53,8 +53,9 @@ A rejected exit halts the engine for manual review.
 
 - Snapshot version 2 is required. Version 1 lacks strategy state and is refused;
   preserve the old journal and begin a separate run rather than guessing recovery state.
-- Store saves compare the complete loaded database version under a write
-  transaction. An external journal or engine write causes a refusal, never an overwrite.
+- Store saves check, under a write transaction, that no other connection has changed
+  the database since load (SQLite's `data_version`) and that the file was not replaced.
+  An external journal or engine write causes a refusal, never an overwrite.
 - ORB requires a continuous grid of completed five-minute bars from the open.
   Missing, duplicate or irregular observations block that symbol for the session.
 - Forward engine entries require a `HistoryStore.coverage` provider with at least
