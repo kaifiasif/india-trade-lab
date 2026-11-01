@@ -11,9 +11,10 @@ SECRETS="$HOME/.india-trade-lab.secrets"
 
 echo "== Packages and IST clock"
 sudo apt-get update -qq
-sudo apt-get install -y -qq git python3 sqlite3 >/dev/null
+sudo apt-get install -y -qq git python3 python3-numpy sqlite3 >/dev/null
 sudo timedatectl set-timezone Asia/Kolkata
 python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
+python3 -c 'import numpy' || { echo "NumPy is required: sudo apt-get install python3-numpy"; exit 1; }
 
 echo "== Repository"
 if [ ! -d "$REPO/.git" ]; then
@@ -161,10 +162,12 @@ WantedBy=multi-user.target
 UNIT
 
 # Let the daily login restart only the market service, without a password prompt.
-echo "$USER_NAME ALL=(root) NOPASSWD: /usr/bin/systemctl restart india-trade-lab-market.service" |
-  sudo tee /etc/sudoers.d/india-trade-lab >/dev/null
-sudo chmod 440 /etc/sudoers.d/india-trade-lab
-sudo visudo -cf /etc/sudoers.d/india-trade-lab >/dev/null
+# Check a temporary copy first: a broken file in sudoers.d would disable sudo entirely.
+rule="$(mktemp)"
+echo "$USER_NAME ALL=(root) NOPASSWD: /usr/bin/systemctl restart india-trade-lab-market.service" >"$rule"
+sudo visudo -cf "$rule" >/dev/null
+sudo install -m 440 -o root -g root "$rule" /etc/sudoers.d/india-trade-lab
+rm -f "$rule"
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now india-trade-lab-premarket.timer india-trade-lab-open.timer \

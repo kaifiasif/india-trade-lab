@@ -23,7 +23,7 @@ from engine import (
     Phase,
     Quote,
 )
-from paper_book import create, fill
+from paper_book import create, fill, seal_state
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "skills/day-trader-india/assets"
@@ -383,6 +383,26 @@ class RecoveryRegressionTests(unittest.TestCase):
             first.save(runner)
             with self.assertRaisesRegex(ValueError, "stale engine save"):
                 second.save(runner)
+
+    def test_outside_writes_and_a_replaced_file_are_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, broker, _ = build()
+            store = EngineStore(Path(temporary) / "run.sqlite")
+            store.create(broker.book)
+            store.save(runner)
+            store.save(runner)  # Our own commits never look like an outside write.
+            paused = json.dumps(seal_state({**broker.book, "paused": True}))
+            with sqlite3.connect(store.path) as outside:  # e.g. the paper_book CLI pausing
+                outside.execute("UPDATE book SET data=? WHERE id=1", (paused,))
+            with self.assertRaisesRegex(ValueError, "stale engine save"):
+                store.save(runner)
+            fresh = EngineStore(store.path)
+            fresh.load()
+            replacement = Path(temporary) / "copy.sqlite"
+            replacement.write_bytes(store.path.read_bytes())
+            os.replace(replacement, store.path)  # e.g. a backup restored mid-run
+            with self.assertRaisesRegex(ValueError, "replaced since load"):
+                fresh.save(runner)
 
     def orb_engine(self, **parameters):
         return build(
