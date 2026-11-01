@@ -19,12 +19,12 @@ import datetime as dt
 import json
 import os
 import random
+import resource
 import statistics
 import sys
 import tempfile
 import threading
 import time
-import tracemalloc
 import urllib.error
 import urllib.request
 from decimal import Decimal
@@ -177,12 +177,13 @@ def mode_engine(args: argparse.Namespace) -> None:
 def mode_soak(args: argparse.Namespace) -> None:
     print(f"== Soak: {args.days} sessions of {args.symbols} symbols", flush=True)
     symbols = [f"NSE:SOAK{index}" for index in range(args.symbols)]
-    tracemalloc.start()
+    # Peak memory from the OS, not tracemalloc: tracing taxes every allocation and made the
+    # timing itself look ~3x worse as the journal grew.
     with tempfile.TemporaryDirectory() as folder:
         rows = run_days(symbols, trading_days(args.days), Path(folder), args.seed)
         disk_mb = sum(path.stat().st_size for path in Path(folder).iterdir()) / 1e6
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    peak *= 1 if sys.platform == "darwin" else 1024  # Bytes on macOS, KiB on Linux.
     window = max(1, len(rows) // 10)
     early = statistics.fmean(row["seconds"] for row in rows[:window])
     late = statistics.fmean(row["seconds"] for row in rows[-window:])

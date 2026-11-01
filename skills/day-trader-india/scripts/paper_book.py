@@ -207,7 +207,14 @@ def fill(
     reviewed_evidence = None
     if side == "buy":
         reviewed_evidence = check_entry(book, evidence, symbol, t, clock, price, source)
-    state = copy.deepcopy(book)
+    # Copy only what a fill changes. Past events are never edited, so the new list may
+    # share them; deep-copying the whole history made each fill slower as it grew.
+    state = {
+        **book,
+        "positions": copy.deepcopy(book["positions"]),
+        "realized_by_day": dict(book["realized_by_day"]),
+        "events": list(book["events"]),
+    }
     positions, limits = state["positions"], state["limits"]
     day = t.date().isoformat()
     event = {
