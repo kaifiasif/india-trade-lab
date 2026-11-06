@@ -30,13 +30,13 @@ export const Trade: React.FC = () => {
     <Stage>
       <AbsoluteFill style={{ flexDirection: "row", alignItems: "center", padding: "0 110px", gap: 70 }}>
         <div style={{ width: 720 }}>
-          <Kicker>09:15 – 15:15</Kicker>
+          <Kicker>09:15 – 15:05</Kicker>
           <Headline size={88}>Paper trades, hard limits.</Headline>
           <Sub start={18}>Code sizes every trade from your limits. No agent can raise them.</Sub>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 40, opacity: useIn(30, 16) }}>
             <Pill tone="ink" size={30}>₹250 risk a trade</Pill>
             <Pill tone="ink" size={30}>₹750 daily loss stop</Pill>
-            <Pill tone="ink" size={30}>Square-off 15:15</Pill>
+            <Pill tone="ink" size={30}>Square-off 15:05</Pill>
           </div>
         </div>
         <Card style={{ padding: 30, position: "relative" }}>

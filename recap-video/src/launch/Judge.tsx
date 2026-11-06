@@ -55,7 +55,7 @@ export const Judge: React.FC = () => (
         <Bot name="judge" size={200} start={0} />
         <Kicker start={6}>The judge</Kicker>
         <Headline size={88} start={10}>
-          Picks up to three. Code can only narrow.
+          Picks up to ten. Code can only narrow.
         </Headline>
         <Sub start={22}>A risk scout and a setup planner check every finalist first.</Sub>
       </div>

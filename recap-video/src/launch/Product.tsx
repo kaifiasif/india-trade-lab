@@ -6,8 +6,8 @@ const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const SHOTS = [
   { file: "today", label: "Today's picks" },
   { file: "replay", label: "Paper replay" },
+  { file: "performance", label: "Performance and tax view" },
   { file: "learning", label: "Learning" },
-  { file: "routing", label: "Setup from the browser" },
 ];
 const EACH = 54;
 

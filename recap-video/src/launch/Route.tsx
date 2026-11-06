@@ -41,7 +41,7 @@ export const Route: React.FC = () => {
         <div style={{ width: 600 }}>
           <Kicker>Smart routing</Kicker>
           <Headline size={88}>Free tier first. Your quota lasts.</Headline>
-          <Sub start={18}>Simple jobs go to a free model, the judge to a strong one. Reruns come from a cache.</Sub>
+          <Sub start={18}>Simple jobs go to a free model, the judge to the best one OpenRouter offers. Daily and monthly spend caps.</Sub>
         </div>
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 0 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
